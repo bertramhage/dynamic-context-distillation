@@ -87,6 +87,7 @@ src/
     __init__.py
     metrics.py
     utils.py
+    wandb_utils.py
 ```
 
 ---
@@ -175,8 +176,61 @@ _Not implemented yet._
 ### CLI entrypoint (current)
 - `src/evaluation/main.py` main function:
   - loads Hydra config,
+  - initializes WandB run (if enabled),
   - loads Chronos pipeline and dataset,
   - runs evaluation,
-  - prints forecast + runtime summaries.
+  - prints forecast + runtime summaries,
+  - logs metrics and runtime stats to WandB (if enabled).
+
+---
+
+## 6. Experiment Tracking (WandB)
+
+### Module
+- `src/utils/wandb_utils.py` provides `init_wandb(cfg, group)` and `finish_wandb()`.
+
+### Run ownership — CLI vs API
+- **CLI entrypoint** (e.g. `src/evaluation/main.py main()`): calls `init_wandb(cfg, group="evaluation")` and `finish_wandb()`. Owns the full run lifecycle.
+- **API call** (e.g. calling `run_evaluation()` from orchestration or a script): the caller is responsible for `init_wandb` / `finish_wandb`. `run_evaluation()` logs per-step metrics if `wandb.run` is active — it never inits or finishes.
+
+### Per-step logging
+`run_evaluation()` checks `wandb.run is not None` after each rolling-window step and logs:
+- `eval/h{horizon}_{metric}` — metric value for the current step
+- `eval/h{horizon}_{metric}_running_avg` — running average up to the current step
+- `eval/progress` — fraction of steps completed
+
+This gives live visibility into long evaluation runs.
+
+### Final summary
+`main()` writes cross-horizon averages and runtime stats to `wandb.summary` after the run completes.
+
+### Project and group
+- **Project** is hardcoded to `advanced-ba` in `wandb_utils.py`.
+- **Group** is hardcoded per layer (e.g. `"evaluation"`, `"training"`), passed as an argument to `init_wandb`.
+- **Run name** comes from `cfg.wandb.run_name`.
+
+### Config
+All experiment configs include a `wandb:` section (disabled by default):
+```yaml
+wandb:
+  enabled: false
+  entity: null
+  run_name: null
+  tags: []
+```
+Enable via CLI override: `wandb.enabled=true`.
+
+### Metric namespace convention
+| Prefix | Layer | Examples |
+|--------|-------|---------|
+| `eval/` | Evaluation | `eval/h15_MAE`, `eval/h15_MAE_running_avg`, `eval/avg_RMSE` |
+| `runtime/` | Evaluation | `runtime/avg_task_inference_seconds` |
+| `train/` | Training (future) | `train/loss`, `train/lr` |
+
+### Adding WandB to a new layer
+1. Call `init_wandb(cfg, group="your_layer")` at the top of your CLI entrypoint.
+2. Inside your loop, check `if wandb.run is not None:` and call `wandb.log(...)`.
+3. Call `finish_wandb()` at the end of your CLI entrypoint.
+4. If the function may be called from an outer layer, do **not** init/finish inside it — just log when `wandb.run` is active.
 
 ---

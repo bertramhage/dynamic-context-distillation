@@ -7,6 +7,7 @@ import sys
 from peft import PeftModel
 from chronos import BaseChronosPipeline, Chronos2Pipeline
 
+import wandb
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from src.evaluation.adapter_runtime import (
@@ -16,6 +17,7 @@ from src.evaluation.adapter_runtime import (
 from src.utils.metrics import evaluation
 from src.utils import utils as shared_utils
 from src.utils.utils import calculate_metrics, metrics, probabilistic_metrics
+from src.utils.wandb_utils import init_wandb, finish_wandb
 
 
 def _print_final_metrics(cfg, horizon_metrics: dict) -> None:
@@ -354,6 +356,18 @@ def run_evaluation(
                         f"No data to evaluate for horizon {h} at step {step_idx} and {current_pred_time}"
                     )
 
+        if wandb.run is not None:
+            step_log = {"eval/step": step_idx, "eval/progress": step_idx / total_steps}
+            for h in horizons:
+                for metric_name in ("MAE", "MAPE", "RMSE", "COVERAGE"):
+                    vals = horizon_metrics[h][metric_name]
+                    if vals:
+                        step_log[f"eval/h{h}_{metric_name}"] = vals[-1]
+                        step_log[f"eval/h{h}_{metric_name}_running_avg"] = (
+                            sum(vals) / len(vals)
+                        )
+            wandb.log(step_log, step=step_idx)
+
         current_pred_time += stride_delta
 
     if cfg.dataset == "UrbanEV":
@@ -407,6 +421,7 @@ def main(cfg: DictConfig):
     dataset_cfg = OmegaConf.load(f"conf/{dataset_cfg_path}.yaml")
     cfg = OmegaConf.merge(dataset_cfg, cfg)
     print(OmegaConf.to_yaml(cfg))
+    wb_run = init_wandb(cfg, group="evaluation")
     shared_utils.set_seed(cfg.seed)
 
     if torch.cuda.is_available():
@@ -432,6 +447,27 @@ def main(cfg: DictConfig):
     )
     _print_final_metrics(cfg, horizon_metrics)
     _print_runtime_metrics(runtime_stats)
+
+    if wb_run is not None:
+        all_horizons = list(horizon_metrics.keys())
+        if all_horizons:
+            sample_metrics = next(iter(horizon_metrics.values()))
+            for metric_name in sample_metrics.keys():
+                per_horizon_avgs = []
+                for h in all_horizons:
+                    vals = horizon_metrics[h][metric_name]
+                    if isinstance(vals, list) and vals:
+                        per_horizon_avgs.append(sum(vals) / len(vals))
+                if per_horizon_avgs:
+                    wandb.summary[f"eval/avg_{metric_name}"] = (
+                        sum(per_horizon_avgs) / len(per_horizon_avgs)
+                    )
+
+        for k, v in runtime_stats.items():
+            if v is not None:
+                wandb.summary[f"runtime/{k}"] = v
+
+        finish_wandb()
 
 
 if __name__ == "__main__":

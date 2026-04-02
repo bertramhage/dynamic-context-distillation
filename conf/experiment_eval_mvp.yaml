@@ -1,3 +1,5 @@
+# This is a configuration file for evaluating the MVP model on the PEMS-BAY dataset.
+
 dataset_cfg: dataset/PEMS-BAY
 
 cross_learning: true
@@ -28,3 +30,9 @@ adapter:
     - output_patch_embedding.output_layer
 
   # Assignment mapping is provided in-memory by orchestration.
+
+wandb:
+  enabled: true
+  entity: null
+  run_name: null
+  tags: []

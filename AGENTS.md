@@ -23,6 +23,9 @@ If they differ, treat `SOLUTION_DESIGN.md` as the source of truth for current co
 - Place new code in the correct layer. Do not mix responsibilities across layers.
 - Do not move or rename modules unless the task explicitly requires it.
 - Keep APIs minimal and explicit; prefer simple data flow over hidden coupling.
+- For larger design or feature work, use a modular design mindset instead of long monolithic scripts.
+- Prefer thin orchestration scripts that call reusable module functions/classes.
+- Module APIs must be explicit: define expected inputs and promised outputs clearly.
 
 ## 4. Coding Style Rules
 - Keep code simple, short, and readable.
@@ -63,7 +66,13 @@ Do NOT change README.md
 	- `uv sync`
 	- `uv run ...`
 
-## 9. Priority Order for Agent Decisions
+## 9. Branching Strategy
+- Do not develop directly on `main`.
+- Always create and use a feature branch for implementation work.
+- Keep feature branches short-lived and light.
+- Scope each feature branch to a single functionality whenever possible.
+
+## 10. Priority Order for Agent Decisions
 When rules conflict, follow this priority:
 1. Direct user request.
 2. `IMPLEMENTATION_PLAN.md` scope constraints.
