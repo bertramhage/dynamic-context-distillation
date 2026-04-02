@@ -4,6 +4,9 @@
 
 We're adapting the Doc-to-LoRA (D2L) hypernetwork framework to time-series: a Perceiver-based hypernetwork reads a long historical context window and produces a LoRA adapter for Chronos-2 in one forward pass, so the model can forecast with a much shorter context window while retaining (or even exceeding) the accuracy of the full-context baseline.
 
+Repository reference note: the full Doc-to-LoRA repository is included in this codebase under `doc-to-lora/` for direct implementation reference during reuse/adaptation steps.
+The markdown implementation design and methodology reference is available at `doc-to-lora/methodology.md`.
+
 ---
 
 ## Critical Discovery: Chronos-2 Architecture
@@ -27,6 +30,8 @@ This is excellent news — we don't need to figure out where to inject LoRA; the
 ## What We Reuse vs. What We Build
 
 ### From D2L (reuse heavily)
+The full D2L codebase is available locally under `doc-to-lora/`, so reuse/adaptation in this plan can reference concrete source files directly.
+
 | Component | Reuse? | Adaptation needed |
 |-----------|--------|-------------------|
 | Perceiver aggregator | **Yes** — core architecture | Change input dim from text embedding dim → Chronos hidden dim (768) |

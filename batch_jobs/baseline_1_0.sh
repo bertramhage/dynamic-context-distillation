@@ -48,4 +48,4 @@ echo "Host: $(hostname)"
 nvidia-smi || true
 
 ### run script
-uv run src/main.py dataset_cfg=dataset/PEMS-BAY
+uv run python -m src.evaluation.main --config-name experiment_baseline dataset_cfg=dataset/PEMS-BAY

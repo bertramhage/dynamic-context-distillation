@@ -56,6 +56,8 @@ Update `SOLUTION_DESIGN.md` whenever implementation changes meaningfully, includ
 - behavior or data-flow changes,
 - config or runtime contract changes.
 
+Do not update `SOLUTION_DESIGN.md` if you only did bug fixing, small minor changes, or updates to the documentation (not core source functionality).
+
 For multi-step implementation work, revisit and refresh `SOLUTION_DESIGN.md` periodically so it stays accurate.
 
 Do NOT change README.md
