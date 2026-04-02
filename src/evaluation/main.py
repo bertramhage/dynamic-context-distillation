@@ -130,8 +130,9 @@ def run_evaluation(
     )
 
     adapter_cfg = getattr(cfg, "adapter", None)
+    default_adapter_id = "__none__"
     if adapter_cfg is not None:
-        _ = str(adapter_cfg.get("default_id", "__none__"))
+        default_adapter_id = str(adapter_cfg.get("default_id", "__none__"))
 
     assignment_mapping = build_assignment_mapping(
         assignments_df=assignments_df,
@@ -202,27 +203,14 @@ def run_evaluation(
         )
 
         assignment_rows = []
-        missing_assignments: list[str] = []
         for item in item_ids:
             key = (str(item), pd.Timestamp(current_pred_time))
-            adapter_id = assignment_mapping.get(key)
-            if adapter_id is None:
-                missing_assignments.append(str(item))
-                continue
-
+            adapter_id = assignment_mapping.get(key, default_adapter_id)
             assignment_rows.append(
                 {
                     id_column: item,
                     "adapter_id": str(adapter_id),
                 }
-            )
-
-        if missing_assignments:
-            sample = ", ".join(missing_assignments[:5])
-            raise ValueError(
-                "Missing adapter assignment for prediction tasks at "
-                f"prediction_time={current_pred_time}. "
-                f"Missing count={len(missing_assignments)}. Sample item_ids=[{sample}]"
             )
 
         step_assignments = pd.DataFrame(assignment_rows)

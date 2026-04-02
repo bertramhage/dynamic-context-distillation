@@ -24,14 +24,17 @@
 #BSUB -N
 
 ### Output and error files
-#BSUB -o hpc_jobs/logs/Output_%J.out
-#BSUB -e hpc_jobs/logs/Output_%J.err
+#BSUB -o batch_jobs/logs/Output_%J.out
+#BSUB -e batch_jobs/logs/Output_%J.err
 
 # exit on error and undefined variables
 set -eu
 
 ### cd to repo dir
 cd ~/advanced-ba
+
+# ensure local log directory exists for any script-side logging
+mkdir -p batch_jobs/logs
 
 ### load cuda module
 module swap cuda/12.6.3
