@@ -33,8 +33,7 @@ set -eu
 ### cd to repo dir
 cd ~/advanced-ba
 
-### load python and cuda modules
-module swap python3/3.12.12
+### load cuda module
 module swap cuda/12.6.3
 
 ### activate environment
