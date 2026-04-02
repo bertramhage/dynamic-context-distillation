@@ -34,13 +34,13 @@ This is excellent news — we don't need to figure out where to inject LoRA; the
 | LoRA forward injection (`lora_layer.py`) | **Partially** | Rewrite for Chronos-2's `nn.Linear` layers (different naming: `self_attention.q` not `self_attn.q_proj`) |
 | LoRA merger | **Maybe later** | Only needed if we chunk the history window |
 | Text context encoder | **No** | Replace entirely with time-series context encoder |
-| Training loop (distillation) | **Partially** | Swap KL divergence for MSE; adapt data pipeline |
+| Training loop (distillation) | **Partially** | Keep KL divergence (on output quantile vectors); adapt data pipeline |
 | Config system | **Partially** | Simplify for our use case |
 
 ### From mobility-baselines (reuse heavily)
 | Component | Reuse? | Adaptation needed |
 |-----------|--------|-------------------|
-| PeMSD7 data loading (`utils.py`) | **Yes** | Minor: also expose raw numpy arrays, not just Chronos DataFrames |
+| PEMS-BAY data loading (`utils.py`) | **Yes** | Minor: also expose raw numpy arrays, not just Chronos DataFrames |
 | Hydra config system | **Yes** | Add our own configs for hypernetwork |
 | Evaluation metrics (MAE, MAPE, RMSE, coverage) | **Yes** |  |
 | Chronos-2 inference pipeline | **Yes** | Extend to support LoRA-injected model |
@@ -49,7 +49,7 @@ This is excellent news — we don't need to figure out where to inject LoRA; the
 ### New code we build
 | Component | Description |
 |-----------|-------------|
-| **TimeSeriesContextEncoder** | Encodes long history into feature representations (using frozen Chronos-2 encoder itself or a simpler MLP/Conv approach) |
+| **TimeSeriesContextEncoder** | Encodes long history into feature representations using the frozen Chronos-2 encoder |
 | **Adapted HyperLoRA** | Wired to Chronos-2's architecture: 12 layers × 4 attention modules + output head |
 | **LoRA injection for Chronos-2** | Map generated weights → monkey-patch Chronos-2 Linear layers |
 | **Teacher-student training loop** | Teacher = full-context Chronos-2; Student = short-context + LoRA Chronos-2 |
@@ -93,15 +93,24 @@ The hypernetwork needs to produce these ~600K params in a single forward pass.
    - Install dependencies: `chronos-forecasting`, `peft`, `einops`, `hydra`, etc.
 
 2. **Data pipeline**
-   - Reuse `mobility-baselines/Chronos-2-evaluation/utils.py` for PeMSD7 loading
-   - Create a `PeMSD7Dataset` class that provides:
+  - Reuse `mobility-baselines/Chronos-2-evaluation/utils.py` for PEMS-BAY loading
+  - Create a `PemsBayDataset` class that provides:
      - Long context window (teacher input): e.g. 2016 timesteps (1 week)
      - Short context window (student input): e.g. 256 or 512 timesteps
      - Ground truth future values for evaluation
-   - Implement train/val/test splits (by time, following the benchmark paper)
+  - Use the benchmark split for PEMS-BAY (5-minute granularity, ~6 months of data, 325 sensors), and reserve the tail of the training period as validation for early stopping and hyperparameter tuning.
+  - **Rolling-window sample construction (explicit)**:
+    - Training data is constructed from overlapping long-context windows per station, rather than one static window per station.
+    - Long-context windows are advanced through time with a controlled stride to balance sample diversity and temporal redundancy.
+    - For each long-context window, multiple forecast origins are evaluated by shifting the short-context/forecast pair forward within the admissible time range.
+    - Chronology is strictly causal: forecast targets occur strictly after the short context and after the information used to generate the adapter (no overlap/data leakage).
+  - **D2L-style multi-query analogue**:
+    - One adapter is generated from a given long context and optimized to perform across multiple forecast origins associated with that same context.
+    - This is the time-series analogue of multiple queries per context: the adapter must encode regime-level structure, not a single forecast moment.
+  - PEMS-BAY provides enough temporal coverage to yield a large effective sample pool across stations, window placements, and forecast origins, so training should use densely overlapping windows rather than a tiny fixed set.
 
 3. **Reproduce the baseline**
-   - Run Chronos-2-Base zero-shot on PeMSD7 with the full context window
+  - Run Chronos-2-Base zero-shot on PEMS-BAY with the full context window
    - Verify metrics match the benchmark paper (MAE, MAPE, RMSE, coverage)
    - This becomes the **teacher baseline** and our RQ1 target to match
 
@@ -151,7 +160,7 @@ Long history (2016 steps) → Chronos-2 patch embedding → Chronos-2 encoder (f
 - We do the same, but navigate Chronos-2's module tree:
   - `model.encoder.block[i].layer[0].self_attention.q` (TimeSelfAttention)
   - `model.encoder.block[i].layer[1].self_attention.q` (GroupSelfAttention)
-  - Start with targeting TimeSelfAttention only (this is where temporal context is processed).
+  - Start with targeting TimeSelfAttention only (`layer[0]`) — this is where temporal context is processed. Both attention types share the same module names (`self_attention.q/k/v/o`), so the injection code must explicitly index `layer[0]` to avoid also patching GroupSelfAttention.
 
 **Key implementation detail**: D2L's `lora_forward` expects shape `[n_ctx, r, d_in]` for A and `[n_ctx, r, d_out]` for B, with `n_ctx` being the batch dimension of different contexts. For our use case, each context is a station's history, so `n_ctx` = batch of stations.
 
@@ -173,11 +182,13 @@ Short history (256 steps) + LoRA weights → Chronos-2 (frozen + LoRA) → stude
 ```
 
 **Loss function**:
-- We start with **MSE** between teacher and student output logits/quantile predictions, as it's simple.
+- **KL divergence** between teacher and student output quantile vectors (21 quantiles per forecast step). Chronos-2's output is already a distribution over quantiles, so KL is a natural fit and preserves the probabilistic nature of the predictions.
 
 **Training details**:
 - Only the hypernetwork parameters are trained (Perceiver + ResMLPBlocks + EinMix heads)
-- Batch = multiple stations' histories from PeMSD7
+- Batches are organized around long-context instances, with each instance contributing multiple forecast-origin losses.
+- The training objective aggregates KL divergence across forecast origins for the same context, so learning pressure is placed on context-level generalization.
+- This design reduces over-specialization to any single origin and promotes query-independent pattern encoding.
 - Adam optimizer.
 - Estimated hypernetwork size: ~5–15M params (much smaller than the 120M base model)
 

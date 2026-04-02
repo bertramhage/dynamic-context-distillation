@@ -8,3 +8,13 @@ wheels/
 
 # Virtual environments
 .venv
+venv/
+env/
+.env
+
+# Data files
+*.csv
+*.parquet
+*.h5
+*.pt
+*.pkl
