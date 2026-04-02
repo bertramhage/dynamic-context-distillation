@@ -1,0 +1,30 @@
+dataset_cfg: dataset/PEMS-BAY
+
+cross_learning: true
+batch_size: null
+seed: 42
+
+# Keep runtime small for MVP validation.
+stride_steps: 72
+start_test_day: 120
+n_test_days: 1
+proportion_test: null
+
+quantile_levels: [0.1, 0.5, 0.9]
+
+evaluation:
+  history_length_steps: 2016
+
+adapter:
+  default_id: __none__
+  adapter_root: outputs/adapters
+  rank: 8
+  alpha: 16
+  target_modules:
+    - self_attention.q
+    - self_attention.k
+    - self_attention.v
+    - self_attention.o
+    - output_patch_embedding.output_layer
+
+  # Assignment mapping is provided in-memory by orchestration.
