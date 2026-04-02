@@ -13,8 +13,12 @@ env/
 .env
 
 # Data files
+data/
 *.csv
 *.parquet
 *.h5
 *.pt
 *.pkl
+
+# Outputs
+outputs/
