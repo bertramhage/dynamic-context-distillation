@@ -1,5 +1,3 @@
-"""Convert hypernetwork LoRA output to PEFT-compatible adapter directories on disk."""
-
 from __future__ import annotations
 
 import json

@@ -1,5 +1,3 @@
-"""Orchestration layer: generates LoRA adapters via hypernetwork and runs evaluation."""
-
 from __future__ import annotations
 
 import uuid
@@ -242,15 +240,16 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
         )
         print(f"Context tensor shape: {context_tensor.shape}")
 
-        # Encode through frozen Chronos-2.
-        hidden_states = context_encoder.encode_batched(
+        # Encode through frozen Chronos-2, collecting per-layer intermediates.
+        all_z = context_encoder.encode_intermediates_batched(
             context_tensor, batch_size=encode_batch_size,
         )
-        # hidden_states: [n_sensors, num_patches, 768]
+        # all_z: [n_sensors, num_layers=12, num_context_patches, d_model=768]
+        # all_z[:, l, :, :] = Z_l = input to block l, used to generate LoRA for block l.
 
-        # Run hypernetwork.
-        lora_dict = hypernetwork(hidden_states)
-        # Expected: {"q": {"A": [n_sensors, 12, r, d_in], "B": ...}, ...}
+        # Run hypernetwork: shared Perceiver applied per-layer internally.
+        lora_dict = hypernetwork(all_z)
+        # Expected: {"q": {"A": [n_sensors, 12, r, d_in], "B": [n_sensors, 12, d_out, r]}, ...}
 
         # Save one adapter per sensor.
         for sensor_batch_idx, sensor_id in enumerate(ordered_ids):
@@ -290,11 +289,12 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
                 df_long, sensor_ids, long_start, long_end, id_col, ts_col, target_col,
             )
 
-            hidden_states = context_encoder.encode_batched(
+            all_z = context_encoder.encode_intermediates_batched(
                 context_tensor, batch_size=encode_batch_size,
             )
+            # all_z: [n_sensors, num_layers=12, num_context_patches, d_model=768]
 
-            lora_dict = hypernetwork(hidden_states)
+            lora_dict = hypernetwork(all_z)
 
             for sensor_batch_idx, sensor_id in enumerate(ordered_ids):
                 adapter_id = f"{sensor_id}_step{step_idx}"

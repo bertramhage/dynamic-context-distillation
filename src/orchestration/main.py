@@ -1,5 +1,3 @@
-"""Hydra CLI entrypoint for the orchestration layer."""
-
 import torch
 import numpy as np
 import wandb
