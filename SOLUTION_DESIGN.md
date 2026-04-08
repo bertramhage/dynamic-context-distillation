@@ -106,14 +106,62 @@ _Not implemented yet._
 ---
 
 ## Layer 2: Orchestration
-_Not implemented yet._
 
-### Current state
-- Placeholder package only (`src/orchestration/__init__.py`).
+### Files
+- `src/orchestration/main.py` — Hydra CLI entrypoint
+- `src/orchestration/run.py` — core orchestration logic (`run_orchestration`)
+- `src/orchestration/context_encoder.py` — frozen Chronos-2 encoder wrapper
+- `src/orchestration/lora_saver.py` — hypernetwork output → PEFT adapter on disk
+- `conf/experiment_orchestration.yaml` — default orchestration config
 
-### Notes
-- No orchestration runner has been added yet.
-- Current smoke testing script directly calls evaluation layer APIs.
+### How it works
+
+The orchestration layer is a middleman between a trained hypernetwork (Layer 1 output) and the evaluation layer (Layer 3). Its job:
+
+1. **Load** dataset (`shared_utils.load_dataset`), Chronos-2 pipeline, and hypernetwork checkpoint.
+2. **Generate LoRA adapters**: for each sensor, extract the long-history window from the dataset, encode it through the frozen Chronos-2 encoder to get hidden states `[num_patches, 768]`, run the hypernetwork to produce LoRA weight dicts, and save each adapter to disk as a PEFT-compatible directory.
+3. **Build assignment_df**: a DataFrame mapping `(item_id, prediction_time) → adapter_id` for every evaluation step.
+4. **Call `run_evaluation`** with the short-context config, the generated assignment_df, and the pipeline.
+
+### Time-window layout
+```
+|---- long history ----|-- short context --|-- forecast horizon --|
+                       ^                   ^
+                       short_start         prediction_time (forecast origin)
+```
+
+- **Long history** is consumed only by the hypernetwork; it is NOT passed to evaluation.
+- **Short context** is what Chronos-2 sees during inference (set via `evaluation.history_length_steps`).
+- Short context may overlap with long history (controlled by `long_history_end_offset_steps`).
+
+### Fixed vs. rolling long history
+- **Fixed** (`rolling_long_history: false`): one absolute time window for all prediction steps → one adapter per sensor (efficient: hypernetwork runs once per sensor).
+- **Rolling** (`rolling_long_history: true`): the long-history window moves with the evaluation rolling window → one adapter per sensor per step.
+
+### Context encoder
+`ChronosContextEncoder` wraps the frozen Chronos-2 model. It calls `model.encode()` on raw time-series tensors `[batch, seq_len]` and returns the encoder's `last_hidden_state` `[batch, num_patches, 768]`. Supports batched encoding to control GPU memory.
+
+### Hypernetwork interface (expected)
+```python
+# Input:  context_hidden_states [batch, num_patches, 768]
+# Output: dict[module_short_name, {"A": [batch, 12, r, d_in], "B": [batch, 12, d_out, r]}]
+lora_dict = hypernetwork(hidden_states)
+```
+Module short names: `"q"`, `"k"`, `"v"`, `"o"`.
+
+### Adapter saving
+`save_adapter_to_disk` converts one sensor's slice of the hypernetwork output into a PEFT adapter directory containing `adapter_model.safetensors` and `adapter_config.json`. Modules not covered by the hypernetwork (GroupSelfAttention layer.1, output_patch_embedding) are filled with zero weights.
+
+### Public orchestration API
+- `run_orchestration(cfg)` → `(horizon_metrics, runtime_stats)`
+
+### CLI entrypoint
+```bash
+uv run python -m src.orchestration.main \
+    orchestration.checkpoint_path=checkpoints/my_hypernet.pt \
+    orchestration.rolling_long_history=false \
+    orchestration.long_history_start_date="2017-04-01"
+```
 
 ---
 

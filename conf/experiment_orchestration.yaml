@@ -1,0 +1,66 @@
+# Orchestration layer config: generates LoRA adapters via hypernetwork then evaluates.
+
+dataset_cfg: dataset/PEMS-BAY
+
+cross_learning: true
+batch_size: null
+seed: 42
+
+# Evaluation time range (shared with evaluation layer).
+stride_steps: 72
+start_test_day: 120
+n_test_days: 1
+proportion_test: null
+
+quantile_levels: [0.1, 0.5, 0.9]
+
+# --- Orchestration-specific settings ---
+orchestration:
+  # Path to trained hypernetwork checkpoint (.pt file).
+  checkpoint_path: null  # REQUIRED — set via CLI override
+
+  # Long history: fed to hypernetwork to produce LoRA adapters.
+  long_history_length_steps: 4032  # e.g. 2 weeks at 5-min freq
+
+  # false = fixed window (must set long_history_start_date)
+  # true  = window rolls with evaluation, ending just before short context
+  rolling_long_history: false
+
+  # Only used when rolling_long_history: false
+  long_history_start_date: "2017-04-01"
+
+  # Only used when rolling_long_history: true
+  # Offset of long-history end relative to short-context start:
+  #   0 = no overlap (default), >0 = overlap, <0 = gap
+  long_history_end_offset_steps: 0
+
+  # Short context: passed directly to evaluation as the inference context.
+  short_context_length_steps: 512
+
+  # Output directory for generated PEFT adapters.
+  adapter_output_dir: outputs/adapters
+
+  # Identifier for this run's adapter set (auto-generated if null).
+  run_id: null
+
+  # Max sensors per context-encoder forward pass (GPU memory control).
+  encode_batch_size: 32
+
+# Adapter config (shared with evaluation layer).
+adapter:
+  default_id: __none__
+  adapter_root: outputs/adapters  # overridden by orchestration at runtime
+  rank: 8
+  alpha: 16
+  target_modules:
+    - self_attention.q
+    - self_attention.k
+    - self_attention.v
+    - self_attention.o
+    - output_patch_embedding.output_layer
+
+wandb:
+  enabled: false
+  entity: null
+  run_name: null
+  tags: []
