@@ -1,0 +1,62 @@
+# Training config for hypernetwork distillation.
+
+dataset_cfg: dataset/PEMS-BAY
+
+cross_learning: true
+batch_size: null
+seed: 42
+
+# --- Training data window ---
+training:
+  # Training time range (absolute dates)
+  train_start_date: "2017-01-01"
+  train_end_date: "2017-04-01"    # ~3 months for training
+  val_start_date: "2017-04-01"
+  val_end_date: "2017-05-01"      # ~1 month for validation
+
+  # Context window sizes (in timesteps at dataset freq)
+  long_context_steps: 2016        # 1 week at 5-min freq
+  short_context_steps: 512        # ~1.8 days
+  prediction_length: 12           # 12 steps = 1 hour at 5-min freq
+
+  # Multi-query: multiple forecast origins per long context
+  n_queries_per_context: 4
+  query_stride_steps: 36          # 3 hours between queries
+
+  # Rolling window stride for long context placement
+  long_context_stride_steps: 288  # 1 day
+
+  # Dataloader
+  train_batch_size: 4
+  num_workers: 0
+
+# --- Hypernetwork architecture ---
+hypernet:
+  d_latent: 256                   # Perceiver/head latent dimension
+  lora_rank: 8
+  n_latent_queries: 64            # Perceiver bottleneck
+  num_perceiver_blocks: 2
+  n_self_attn_per_block: 1
+  n_heads: 8
+  num_pre_head_layers: 2
+  dropout: 0.0
+
+# --- Training hyperparams ---
+optimizer:
+  lr: 1.0e-4
+  weight_decay: 0.01
+
+training_loop:
+  max_epochs: 50
+  patience: 5
+  lora_scaling: 2.0               # alpha / rank = 16 / 8
+  l1_reg_coef: 0.0
+  grad_clip: 1.0
+  log_every: 10
+  checkpoint_dir: checkpoints
+
+wandb:
+  enabled: false
+  entity: null
+  run_name: null
+  tags: []

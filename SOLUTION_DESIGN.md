@@ -14,10 +14,10 @@ This document describes what is actually implemented now, not the full future sc
 
 ## 2. Three-Layer Structure
 
-### Layer 1: LoRA Training (not implemented yet)
+### Layer 1: LoRA Training
 **Receives:** training dataset/windows, model/hypernetwork config.
 
-**Outputs:** trained hypernetwork checkpoint and/or generated adapter artifacts.
+**Outputs:** trained hypernetwork checkpoint (`best_hypernet.pt`, `final_hypernet.pt`).
 
 ### Layer 2: Orchestration (not implemented yet)
 **Receives:** experiment config, checkpoints/artifacts, dataset splits.
@@ -81,8 +81,18 @@ src/
     main.py
   orchestration/
     __init__.py
+    context_encoder.py
+    lora_saver.py
+    main.py
+    run.py
   training/
     __init__.py
+    dataset.py
+    hypernet.py
+    lora_injection.py
+    main.py
+    perceiver.py
+    trainer.py
   utils/
     __init__.py
     metrics.py
@@ -95,13 +105,74 @@ src/
 ## 5. Layer Details
 
 ## Layer 1: Training
-_Not implemented yet._
 
-### Current state
-- Placeholder package only (`src/training/__init__.py`).
+### Files
+- `src/training/main.py` — Hydra CLI entrypoint
+- `src/training/perceiver.py` — Perceiver aggregator (cross-attention based context compression)
+- `src/training/hypernet.py` — HyperLoRA generator (Perceiver + EinMix projection heads)
+- `src/training/lora_injection.py` — Runtime LoRA monkey-patching for training forward passes
+- `src/training/dataset.py` — Rolling-window dataset with multi-query support
+- `src/training/trainer.py` — Teacher-student distillation training loop
+- `conf/experiment_training.yaml` — Default training config
 
-### Notes
-- No training loop, context encoder, or hypernetwork code has been added yet.
+### How it works
+
+The training layer implements teacher-student distillation to train a hypernetwork that produces LoRA adapters for Chronos-2.
+
+1. **Dataset** (`HypernetTrainingDataset`): constructs rolling-window samples from the long-format DataFrame. Each sample contains a long context window and multiple (short_context, forecast_target) query pairs. The long context is what the hypernetwork sees; the short contexts are what the LoRA-adapted student model sees during inference.
+
+2. **Context encoding**: the long context is encoded through the frozen Chronos-2 encoder (reuses `ChronosContextEncoder` from orchestration) to produce hidden states `[batch, num_layers, num_patches, 768]`. The last layer's output feeds the hypernetwork.
+
+3. **Hypernetwork** (`HyperLoRA`): a Perceiver aggregator compresses the context encoder output into fixed-size latent queries, which are processed by ResMLPBlock layers and projected via EinMix heads to produce LoRA A/B matrices for each target module across all 12 encoder layers.
+
+4. **LoRA injection** (`apply_lora_to_model`): monkey-patches `nn.Linear.forward` on Chronos-2's TimeSelfAttention modules (q, k, v, o) to add the LoRA delta. Gradients flow through the LoRA weights back to the hypernetwork. Patches are cleaned up after each forward pass.
+
+5. **Training loop** (`HypernetTrainer`):
+   - Teacher: full-context Chronos-2 (frozen) produces quantile predictions.
+   - Student: short-context Chronos-2 + LoRA from hypernetwork.
+   - Loss: smooth L1 on quantile predictions (teacher vs student).
+   - Early stopping on validation loss with configurable patience.
+   - Optional L1 regularization on generated LoRA weights.
+
+### Data flow
+```
+Long history → Frozen Chronos-2 encoder → hidden states [B, L, S, 768]
+                                          → last layer [B, S, 768]
+                                          → Perceiver → [B, L*M*r, d_latent]
+                                          → ResMLPBlocks → EinMix heads
+                                          → LoRA dict {q/k/v/o: {A, B}}
+
+Short history + LoRA → Chronos-2 (monkey-patched) → student quantile preds
+Full history         → Chronos-2 (frozen)          → teacher quantile preds
+                                                   → Loss(student, teacher)
+```
+
+### Hypernetwork output format
+```python
+# lora_dict[module_short]["A"]  -> [batch, 12, r, 768]
+# lora_dict[module_short]["B"]  -> [batch, 12, 768, r]
+# module_short ∈ {"q", "k", "v", "o"}
+```
+
+This is the same format expected by the orchestration layer's `save_adapter_to_disk`.
+
+### Architecture dimensions
+- Perceiver latent dim: configurable (default 256)
+- Perceiver bottleneck: n_latent_queries (default 64)
+- Output queries: num_layers × num_modules × lora_rank = 12 × 4 × 8 = 384
+- EinMix head output: d_model + d_model = 1536 per query
+- Total hypernetwork params: ~15.8M (with default config)
+
+### Public training API
+- `main()` — Hydra CLI entrypoint, manages full lifecycle.
+- `HypernetTrainer.train()` → returns best checkpoint path.
+
+### CLI entrypoint
+```bash
+uv run python -m src.training.main
+uv run python -m src.training.main wandb.enabled=true optimizer.lr=5e-5
+uv run python -m src.training.main training.train_batch_size=8 training_loop.max_epochs=100
+```
 
 ---
 

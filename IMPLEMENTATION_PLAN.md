@@ -169,6 +169,20 @@ Long history (2016 steps) → Chronos-2 patch embedding → Chronos-2 encoder (f
 
 **Key implementation detail**: D2L's `lora_forward` expects shape `[n_ctx, r, d_in]` for A and `[n_ctx, r, d_out]` for B, with `n_ctx` being the batch dimension of different contexts. For our use case, each context is a station's history, so `n_ctx` = batch of stations.
 
+#### What to keep (and modify) from D2L
+1. Reuse (Mostly As-Is)
+These files operate purely on PyTorch tensors and don't care whether the data came from text or time-series.
+- **lora_layer.py**: The most important file to keep. This contains the custom standard Linear overrides (DynamicLoraLinear, etc.) that allow you to inject LoRA A and B weights at runtime during the forward pass. You can use this directly to wrap Chronos-2's internal transformer layers.
+- **aggregator.py**: If your time-series context encoder outputs a sequence of embeddings (e.g., [batch, sequence_length, hidden_dim]), this file contains the logic (mean pooling, attention blocks) to distill that sequence down into a single [batch, hidden_dim] conditioning vector.
+
+2. Reuse With Modifications
+These files contain the right mathematical ideas but are currently tangled up with HuggingFace text-model assumptions (like AutoModelForCausalLM).
+**hypernet.py**:
+- Keep: The projection heads (the actual nn.Linear layers that scale up the conditioning vector into the massive flattened LoRA matrices).
+- Modify: Strip out ModulatedPretrainedModel. Replace it with a simpler generator class that just takes a tensor and returns a dictionary of weights.
+**utils.py**:
+Keep: Helpful PyTorch utilities like compile_linear, log_num_train_params, or basic YAML loading.
+
 ---
 
 ### Phase 3: Teacher-Student Training Loop (Day 7–11)
