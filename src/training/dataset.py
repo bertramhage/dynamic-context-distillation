@@ -110,21 +110,32 @@ class HypernetTrainingDataset(Dataset):
 
         long_ctx = data[lc_start : lc_start + self.long_context_steps]
 
+        # Teacher context length is fixed to the longest query's window
+        # (long_ctx + short_ctx + max_offset) so all queries can be stacked.
+        max_offset = (self.n_queries - 1) * self.query_stride_steps
+        teacher_len = self.long_context_steps + self.short_context_steps + max_offset
+
         short_contexts = []
         teacher_contexts = []
         targets = []
 
         for q in range(self.n_queries):
             offset = q * self.query_stride_steps
-            # Short context starts right after long context + offset
             sc_start = lc_start + self.long_context_steps + offset
             sc_end = sc_start + self.short_context_steps
             t_end = sc_end + self.prediction_length
 
             short_contexts.append(data[sc_start:sc_end])
 
-            # Teacher gets the full window: from long_context_start to sc_end
-            teacher_contexts.append(data[lc_start:sc_end])
+            # Teacher gets from lc_start to sc_end; left-pad with NaN
+            # so all teacher contexts have the same length.
+            teacher_raw = data[lc_start:sc_end]
+            pad_len = teacher_len - len(teacher_raw)
+            if pad_len > 0:
+                teacher_raw = np.concatenate(
+                    [np.full(pad_len, np.nan, dtype=np.float32), teacher_raw]
+                )
+            teacher_contexts.append(teacher_raw)
 
             targets.append(data[sc_end:t_end])
 
