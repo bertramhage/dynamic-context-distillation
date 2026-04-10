@@ -6,9 +6,6 @@
 ### Queue Name:
 #BSUB -q gpua100
 
-### Ensure 80GB GPU used
-#BSUB -R "select[gpu80gb]"
-
 ### Requesting one host
 #BSUB -R "span[hosts=1]"
 
