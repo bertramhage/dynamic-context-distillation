@@ -60,6 +60,9 @@ CHECKPOINT_PATH="checkpoints/best_hypernet.pt"
 
 echo "Starting full-scale training run: ${TRAIN_RUN_NAME}"
 uv run python -m src.training.main \
+  training.long_context_steps=4032 \
+  training.short_context_steps=256 \
+  training.query_stride_steps=72 \
   wandb.enabled=true \
   "wandb.run_name=${TRAIN_RUN_NAME}" \
   "wandb.tags=[hpc,fullscale,training]"
@@ -73,6 +76,8 @@ echo "Starting full-scale orchestration + evaluation run: ${ORCH_RUN_NAME}"
 uv run python -m src.orchestration.main \
   "orchestration.checkpoint_path=${CHECKPOINT_PATH}" \
   "orchestration.run_id=${RUN_ID}" \
+  orchestration.long_history_length_steps=4032 \
+  orchestration.short_context_length_steps=256 \
   stride_steps=1 \
   start_test_day=null \
   n_test_days=null \
