@@ -20,6 +20,43 @@ from src.utils.utils import calculate_metrics, metrics, probabilistic_metrics
 from src.utils.wandb_utils import init_wandb, finish_wandb
 
 
+def _maybe_subsample_stations(cfg, df_long: pd.DataFrame) -> pd.DataFrame:
+    """Return a deterministic station subset when configured; otherwise return full data."""
+    eval_cfg = getattr(cfg, "evaluation", None)
+    if eval_cfg is None or eval_cfg.get("station_subset_fraction") is None:
+        return df_long
+
+    subset_fraction = float(eval_cfg.station_subset_fraction)
+    if not 0 < subset_fraction <= 1:
+        raise ValueError("evaluation.station_subset_fraction must be in (0, 1].")
+    if subset_fraction >= 1.0:
+        return df_long
+
+    id_column = cfg.id_column
+    all_station_ids = np.sort(df_long[id_column].dropna().astype(str).unique())
+    total_stations = int(all_station_ids.size)
+    if total_stations == 0:
+        raise ValueError(f"No stations found in column '{id_column}' for subsetting.")
+
+    subset_seed_cfg = eval_cfg.get("station_subset_seed")
+    subset_seed = int(cfg.seed if subset_seed_cfg is None else subset_seed_cfg)
+
+    selected_count = max(1, int(np.floor(total_stations * subset_fraction)))
+    rng = np.random.default_rng(subset_seed)
+    selected_station_ids = np.sort(
+        rng.choice(all_station_ids, size=selected_count, replace=False)
+    )
+
+    filtered_df = df_long[df_long[id_column].astype(str).isin(selected_station_ids)].copy()
+    actual_fraction = selected_count / total_stations
+    print(
+        "Station subset enabled: "
+        f"{selected_count}/{total_stations} stations "
+        f"({actual_fraction:.2%}), seed={subset_seed}"
+    )
+    return filtered_df
+
+
 def _print_final_metrics(cfg, horizon_metrics: dict) -> None:
     print("Final Average Metrics per Horizon:")
 
@@ -90,6 +127,8 @@ def run_evaluation(
     assignments_df: pd.DataFrame | None = None,
     return_runtime: bool = False,
 ) -> dict | tuple[dict, dict]:
+    df_long = _maybe_subsample_stations(cfg, df_long)
+
     prediction_length = cfg.prediction_length + 1
     id_column = cfg.id_column
     number_of_sensors = df_long[id_column].nunique()

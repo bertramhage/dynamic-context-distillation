@@ -1,0 +1,17 @@
+dataset_cfg: dataset/PEMS-BAY.yaml
+cross_learning: true
+batch_size: null
+stride_steps: 1
+seed: 42
+quantile_levels: [0.1, 0.5, 0.9]
+
+evaluation:
+  history_length_steps: null
+  station_subset_fraction: 0.4
+  station_subset_seed: 42
+
+wandb:
+  enabled: true
+  entity: null
+  run_name: null
+  tags: [baseline, context_sweep]

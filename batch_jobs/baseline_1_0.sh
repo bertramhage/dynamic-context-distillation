@@ -4,7 +4,7 @@
 #BSUB -J baseline_1_0
 
 ### Queue Name:
-#BSUB -q gpua100
+#BSUB -q "gpua10 gpua40 gpul40s gpuh100 gpuv100 gpua100"
 
 ### Requesting one host
 #BSUB -R "span[hosts=1]"
@@ -13,8 +13,8 @@
 #BSUB -gpu "num=1:mode=exclusive_process"
 
 ### Requesting 4 CPU cores, 4GB memory per core (min 4 cores pr gpu)
-#BSUB -n 8
-#BSUB -R "rusage[mem=8GB]"
+#BSUB -n 4
+#BSUB -R "rusage[mem=4GB]"
 
 ### Setting a runtime limit of 12 hours
 #BSUB -W 12:00
