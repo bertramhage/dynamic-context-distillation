@@ -169,20 +169,28 @@ class HypernetTrainer:
         B, Q, T = short_contexts.shape
         num_patches = _compute_num_output_patches(prediction_length, self.output_patch_size)
 
-        all_student_preds = []
-        for q_idx in range(Q):
-            ctx = short_contexts[:, q_idx].to(self.device)  # [B, T]
+        # Flatten queries so student runs once on [B*Q, T] instead of Q runs on [B, T].
+        flat_ctx = short_contexts.to(self.device).reshape(B * Q, T)
 
-            # Apply LoRA and run forward
-            patches = apply_lora_to_model(self.model, lora_dict, self.lora_scaling)
-            out = self.model.forward(ctx, num_output_patches=num_patches)
+        # LoRA is generated per context (B); repeat each context's LoRA Q times
+        # to align with flattened query rows [b0q0, b0q1, ..., b1q0, ...].
+        expanded_lora = {
+            module_name: {
+                "A": module_weights["A"].repeat_interleave(Q, dim=0),
+                "B": module_weights["B"].repeat_interleave(Q, dim=0),
+            }
+            for module_name, module_weights in lora_dict.items()
+        }
+
+        patches = apply_lora_to_model(self.model, expanded_lora, self.lora_scaling)
+        try:
+            out = self.model.forward(flat_ctx, num_output_patches=num_patches)
+        finally:
             remove_lora(patches)
 
-            qp = out.quantile_preds[:, :, :prediction_length]
-            all_student_preds.append(qp)
-
-        # Stack: [B, Q, n_quantiles, pred_steps]
-        return torch.stack(all_student_preds, dim=1)
+        qp = out.quantile_preds[:, :, :prediction_length]
+        n_q = qp.shape[1]
+        return qp.reshape(B, Q, n_q, prediction_length)
 
     def _compute_l1_reg(self, lora_dict: dict) -> torch.Tensor:
         """L1 regularization on generated LoRA weights."""

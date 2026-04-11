@@ -88,6 +88,7 @@ def main(cfg: DictConfig) -> None:
     train_dataset = _build_dataset(df_long, cfg, t.train_start_date, t.train_end_date)
     val_dataset = _build_dataset(df_long, cfg, t.val_start_date, t.val_end_date)
     print(f"Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}")
+    pin_memory = device == "cuda"
 
     train_loader = DataLoader(
         train_dataset,
@@ -96,6 +97,7 @@ def main(cfg: DictConfig) -> None:
         num_workers=t.num_workers,
         collate_fn=collate_training_batch,
         drop_last=True,
+        pin_memory=pin_memory,
     )
     val_loader = DataLoader(
         val_dataset,
@@ -103,6 +105,7 @@ def main(cfg: DictConfig) -> None:
         shuffle=False,
         num_workers=t.num_workers,
         collate_fn=collate_training_batch,
+        pin_memory=pin_memory,
     )
 
     # --- Load Chronos-2 (teacher/student predictions) ---

@@ -20,15 +20,15 @@ training:
   prediction_length: 12           # 12 steps = 1 hour at 5-min freq
 
   # Multi-query: multiple forecast origins per long context
-  n_queries_per_context: 4
-  query_stride_steps: 36          # 3 hours between queries
+  n_queries_per_context: 16
+  query_stride_steps: 72          # 6 hours between forecast origins
 
   # Rolling window stride for long context placement
   long_context_stride_steps: 288  # 1 day
 
   # Dataloader
-  train_batch_size: 4
-  num_workers: 0
+  train_batch_size: 16
+  num_workers: 4
 
 # --- Context encoder model ---
 context_encoder_model: "amazon/chronos-bolt-mini"
@@ -57,7 +57,7 @@ training_loop:
   grad_clip: 1.0
   log_every: 10
   checkpoint_dir: checkpoints
-  gradient_accumulation_steps: 8
+  gradient_accumulation_steps: 2
   warmup_steps: 100
 
 wandb:
