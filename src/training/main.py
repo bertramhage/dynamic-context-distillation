@@ -105,19 +105,25 @@ def main(cfg: DictConfig) -> None:
         collate_fn=collate_training_batch,
     )
 
-    # --- Load Chronos-2 ---
+    # --- Load Chronos-2 (teacher/student predictions) ---
     pipeline: Chronos2Pipeline = BaseChronosPipeline.from_pretrained(
         "amazon/chronos-2", device_map=device,
     )
     print("Chronos-2 loaded")
 
-    # --- Context encoder ---
-    context_encoder = ChronosContextEncoder(pipeline)
+    # --- Load context encoder model (embeddings for hypernetwork) ---
+    context_model_name = cfg.get("context_encoder_model", "amazon/chronos-2")
+    context_pipeline = BaseChronosPipeline.from_pretrained(
+        context_model_name, device_map=device,
+    )
+    context_encoder = ChronosContextEncoder(context_pipeline)
+    context_d_model = context_pipeline.model.config.d_model
+    print(f"Context encoder loaded: {context_model_name} (d_model={context_d_model})")
 
     # --- Hypernetwork ---
     h = cfg.hypernet
     hypernetwork = HyperLoRA(
-        d_input=768,  # Chronos-2 Base hidden dim
+        d_input=context_d_model,
         d_latent=h.d_latent,
         lora_rank=h.lora_rank,
         n_latent_queries=h.n_latent_queries,
@@ -148,6 +154,8 @@ def main(cfg: DictConfig) -> None:
         grad_clip=loop_cfg.grad_clip,
         log_every=loop_cfg.log_every,
         device=device,
+        gradient_accumulation_steps=loop_cfg.gradient_accumulation_steps,
+        warmup_steps=loop_cfg.warmup_steps,
     )
 
     # --- Train ---

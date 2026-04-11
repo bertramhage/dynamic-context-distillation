@@ -7,6 +7,8 @@ Adapted from D2L's HyperLoRA: keeps ResMLPBlock pre-head processing and
 EinMix projection heads, but simplified for Chronos-2's architecture.
 """
 
+import math
+
 import torch
 import torch.nn as nn
 from einops import rearrange
@@ -115,6 +117,10 @@ class HyperLoRA(nn.Module):
             r=lora_rank,
             d_lora=d_lora,
         )
+
+        # Initialize EinMix head with small std to prevent wild initial LoRA outputs
+        head_std = 0.5 / math.sqrt(d_latent + d_lora * lora_rank)
+        nn.init.normal_(self.head.weight, mean=0.0, std=head_std)
 
         # Learnable bias and scaler for A and B (from D2L)
         self.bias_A = nn.ParameterDict({

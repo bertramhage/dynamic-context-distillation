@@ -121,9 +121,9 @@ The training layer implements teacher-student distillation to train a hypernetwo
 
 1. **Dataset** (`HypernetTrainingDataset`): constructs rolling-window samples from the long-format DataFrame. Each sample contains a long context window and multiple (short_context, forecast_target) query pairs. The long context is what the hypernetwork sees; the short contexts are what the LoRA-adapted student model sees during inference.
 
-2. **Context encoding**: the long context is encoded through the frozen Chronos-2 encoder (reuses `ChronosContextEncoder` from orchestration) to produce hidden states `[batch, num_layers, num_patches, 768]`. The last layer's output feeds the hypernetwork.
+2. **Context encoding**: a separate frozen context encoder model (default: Chronos-Bolt-Mini, configurable via `context_encoder_model`) encodes the long context and returns its last hidden state `[batch, num_patches, d_model]`. This is cheaper than the original approach of capturing per-layer intermediates from Chronos-2, and avoids tying the context encoder to the student/teacher model. `ChronosContextEncoder` supports both Chronos-Bolt (T5-based `encode()`) and Chronos-2 (manual block loop) backends.
 
-3. **Hypernetwork** (`HyperLoRA`): a Perceiver aggregator compresses the context encoder output into fixed-size latent queries, which are processed by ResMLPBlock layers and projected via EinMix heads to produce LoRA A/B matrices for each target module across all 12 encoder layers.
+3. **Hypernetwork** (`HyperLoRA`): a Perceiver aggregator compresses the context encoder output into fixed-size latent queries, which are processed by ResMLPBlock layers and projected via EinMix heads to produce LoRA A/B matrices for each target module across all 12 encoder layers. The EinMix head is initialized with a custom small std (`0.5 / sqrt(d_latent + d_lora * rank)`) to prevent wild initial LoRA outputs.
 
 4. **LoRA injection** (`apply_lora_to_model`): monkey-patches `nn.Linear.forward` on Chronos-2's TimeSelfAttention modules (q, k, v, o) to add the LoRA delta. Gradients flow through the LoRA weights back to the hypernetwork. Patches are cleaned up after each forward pass.
 
@@ -131,21 +131,24 @@ The training layer implements teacher-student distillation to train a hypernetwo
    - Teacher: full-context Chronos-2 (frozen) produces quantile predictions.
    - Student: short-context Chronos-2 + LoRA from hypernetwork.
    - Loss: smooth L1 on quantile predictions (teacher vs student).
+   - **Gradient accumulation**: loss is scaled by `1/grad_accum_steps`, optimizer steps every N batches (default 8), giving an effective batch size of `train_batch_size × grad_accum_steps`.
+   - **LR schedule**: cosine annealing with linear warmup (`SequentialLR`). Linear warmup over configurable steps (default 100), then cosine decay to `eta_min=1e-7`. Current LR is logged to wandb.
    - Early stopping on validation loss with configurable patience.
    - Optional L1 regularization on generated LoRA weights.
 
 ### Data flow
 ```
-Long history → Frozen Chronos-2 encoder → hidden states [B, L, S, 768]
-                                          → last layer [B, S, 768]
-                                          → Perceiver → [B, L*M*r, d_latent]
-                                          → ResMLPBlocks → EinMix heads
-                                          → LoRA dict {q/k/v/o: {A, B}}
+Long history → Frozen context encoder (Chronos-Bolt-Mini) → last hidden [B, S, 384]
+              → Perceiver → [B, L*M*r, d_latent]
+              → ResMLPBlocks → EinMix heads
+              → LoRA dict {q/k/v/o: {A, B}}
 
 Short history + LoRA → Chronos-2 (monkey-patched) → student quantile preds
 Full history         → Chronos-2 (frozen)          → teacher quantile preds
                                                    → Loss(student, teacher)
 ```
+
+Note: two separate models are loaded — Chronos-Bolt-Mini for context encoding (embeddings for the hypernetwork) and Chronos-2 for teacher/student predictions. The context encoder model is configurable via `context_encoder_model` in the training config.
 
 ### Hypernetwork output format
 ```python
@@ -156,12 +159,15 @@ Full history         → Chronos-2 (frozen)          → teacher quantile preds
 
 This is the same format expected by the orchestration layer's `save_adapter_to_disk`.
 
-### Architecture dimensions
-- Perceiver latent dim: configurable (default 256)
-- Perceiver bottleneck: n_latent_queries (default 64)
+### Architecture dimensions (current defaults)
+- Context encoder: Chronos-Bolt-Mini (d_model=384)
+- Perceiver latent dim: 128 (was 256)
+- Perceiver bottleneck: n_latent_queries=32 (was 64)
+- Perceiver blocks: 1 (was 2)
+- Pre-head ResMLPBlock layers: 1 (was 2)
 - Output queries: num_layers × num_modules × lora_rank = 12 × 4 × 8 = 384
-- EinMix head output: d_model + d_model = 1536 per query
-- Total hypernetwork params: ~15.8M (with default config)
+- EinMix head output: d_model + d_model = 1536 per query (LoRA targets are still Chronos-2 Base)
+- Total hypernetwork params: ~11M (was ~51M with previous defaults)
 
 ### Public training API
 - `main()` — Hydra CLI entrypoint, manages full lifecycle.
@@ -210,7 +216,11 @@ The orchestration layer is a middleman between a trained hypernetwork (Layer 1 o
 - **Rolling** (`rolling_long_history: true`): the long-history window moves with the evaluation rolling window → one adapter per sensor per step.
 
 ### Context encoder
-`ChronosContextEncoder` wraps the frozen Chronos-2 model. It calls `model.encode()` on raw time-series tensors `[batch, seq_len]` and returns the encoder's `last_hidden_state` `[batch, num_patches, 768]`. Supports batched encoding to control GPU memory.
+`ChronosContextEncoder` wraps a frozen Chronos model (Chronos-2 or Chronos-Bolt). It provides two methods:
+- `encode_last_hidden(context)`: returns only the last hidden state `[batch, num_patches, d_model]`. Used by the training loop. Supports both Chronos-Bolt (uses built-in `encode()`) and Chronos-2 (manual block loop).
+- `encode_intermediates(context)`: returns per-layer hidden states `[batch, num_layers, num_patches, d_model]`. Retained for backward compatibility (orchestration layer). Only works with Chronos-2.
+
+Supports batched encoding to control GPU memory.
 
 ### Hypernetwork interface (expected)
 ```python
@@ -344,7 +354,7 @@ Enable via CLI override: `wandb.enabled=true`.
 |--------|-------|---------|
 | `eval/` | Evaluation | `eval/h15_MAE`, `eval/h15_MAE_running_avg`, `eval/avg_RMSE` |
 | `runtime/` | Evaluation | `runtime/avg_task_inference_seconds` |
-| `train/` | Training (future) | `train/loss`, `train/lr` |
+| `train/` | Training | `train/loss`, `train/lr`, `train/epoch_loss`, `train/epoch_time` |
 
 ### Adding WandB to a new layer
 1. Call `init_wandb(cfg, group="your_layer")` at the top of your CLI entrypoint.

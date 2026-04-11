@@ -16,6 +16,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 from torch.utils.data import DataLoader
 
 import wandb
@@ -80,6 +81,8 @@ class HypernetTrainer:
         grad_clip: float = 1.0,
         log_every: int = 10,
         device: str = "cpu",
+        gradient_accumulation_steps: int = 8,
+        warmup_steps: int = 100,
     ):
         self.hypernetwork = hypernetwork.to(device)
         self.pipeline = pipeline
@@ -96,11 +99,23 @@ class HypernetTrainer:
         self.log_every = log_every
         self.device = device
 
+        self.grad_accum_steps = gradient_accumulation_steps
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
         # Optimizer — only hypernetwork params
         self.optimizer = torch.optim.AdamW(
             hypernetwork.parameters(), lr=lr, weight_decay=weight_decay,
+        )
+
+        # LR scheduler: linear warmup then cosine decay
+        total_steps = max_epochs * len(train_loader) // gradient_accumulation_steps
+        self.scheduler = SequentialLR(
+            self.optimizer,
+            schedulers=[
+                LinearLR(self.optimizer, start_factor=1e-2, total_iters=warmup_steps),
+                CosineAnnealingLR(self.optimizer, T_max=total_steps - warmup_steps, eta_min=1e-7),
+            ],
+            milestones=[warmup_steps],
         )
 
         # Output patch size from model config
@@ -185,21 +200,17 @@ class HypernetTrainer:
         total_loss = 0.0
         n_batches = 0
 
-        for batch_idx, batch in enumerate(self.train_loader):
-            self.optimizer.zero_grad()
+        self.optimizer.zero_grad()
 
+        for batch_idx, batch in enumerate(self.train_loader):
             long_ctx = batch["long_context"].to(self.device)       # [B, long_len]
             short_ctx = batch["short_contexts"]                     # [B, Q, short_len]
             teacher_ctx = batch["teacher_contexts"]                 # [B, Q, teacher_len]
             prediction_length = batch["targets"].shape[-1]
 
-            # 1. Encode long context through frozen Chronos-2
+            # 1. Encode long context through frozen context encoder
             with torch.no_grad():
-                # Use last-layer hidden states for the hypernetwork
-                hidden_states = self.context_encoder.encode_intermediates(long_ctx)
-                # hidden_states: [B, num_layers, num_patches, d_model]
-                # Use last layer for the perceiver
-                ctx_features = hidden_states[:, -1]  # [B, num_patches, d_model]
+                ctx_features = self.context_encoder.encode_last_hidden(long_ctx)
 
             # 2. Generate LoRA weights via hypernetwork
             lora_dict = self.hypernetwork(ctx_features)
@@ -210,21 +221,24 @@ class HypernetTrainer:
             # 4. Student predictions (grad flows through LoRA -> hypernetwork)
             student_preds = self._student_forward(short_ctx, lora_dict, prediction_length)
 
-            # 5. Loss
+            # 5. Loss (scaled for gradient accumulation)
             loss = quantile_kl_divergence(teacher_preds.detach(), student_preds)
 
             if self.l1_reg_coef > 0:
                 l1_reg = self._compute_l1_reg(lora_dict)
                 loss = loss + self.l1_reg_coef * l1_reg
 
-            loss.backward()
+            scaled_loss = loss / self.grad_accum_steps
+            scaled_loss.backward()
 
-            if self.grad_clip > 0:
-                nn.utils.clip_grad_norm_(
-                    self.hypernetwork.parameters(), self.grad_clip,
-                )
-
-            self.optimizer.step()
+            if (batch_idx + 1) % self.grad_accum_steps == 0:
+                if self.grad_clip > 0:
+                    nn.utils.clip_grad_norm_(
+                        self.hypernetwork.parameters(), self.grad_clip,
+                    )
+                self.optimizer.step()
+                self.scheduler.step()
+                self.optimizer.zero_grad()
 
             total_loss += loss.item()
             n_batches += 1
@@ -232,6 +246,7 @@ class HypernetTrainer:
             if wandb.run is not None and (batch_idx + 1) % self.log_every == 0:
                 wandb.log({
                     "train/loss": loss.item(),
+                    "train/lr": self.scheduler.get_last_lr()[0],
                     "train/epoch": epoch,
                     "train/step": epoch * len(self.train_loader) + batch_idx,
                 })
@@ -261,8 +276,7 @@ class HypernetTrainer:
             teacher_ctx = batch["teacher_contexts"]
             prediction_length = batch["targets"].shape[-1]
 
-            hidden_states = self.context_encoder.encode_intermediates(long_ctx)
-            ctx_features = hidden_states[:, -1]
+            ctx_features = self.context_encoder.encode_last_hidden(long_ctx)
 
             lora_dict = self.hypernetwork(ctx_features)
 

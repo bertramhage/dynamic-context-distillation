@@ -30,20 +30,23 @@ training:
   train_batch_size: 4
   num_workers: 0
 
+# --- Context encoder model ---
+context_encoder_model: "amazon/chronos-bolt-mini"
+
 # --- Hypernetwork architecture ---
 hypernet:
-  d_latent: 256                   # Perceiver/head latent dimension
+  d_latent: 128                   # Perceiver/head latent dimension
   lora_rank: 8
-  n_latent_queries: 64            # Perceiver bottleneck
-  num_perceiver_blocks: 2
+  n_latent_queries: 32            # Perceiver bottleneck
+  num_perceiver_blocks: 1
   n_self_attn_per_block: 1
   n_heads: 8
-  num_pre_head_layers: 2
+  num_pre_head_layers: 1
   dropout: 0.0
 
 # --- Training hyperparams ---
 optimizer:
-  lr: 1.0e-4
+  lr: 4.0e-5
   weight_decay: 0.01
 
 training_loop:
@@ -54,6 +57,8 @@ training_loop:
   grad_clip: 1.0
   log_every: 10
   checkpoint_dir: checkpoints
+  gradient_accumulation_steps: 8
+  warmup_steps: 100
 
 wandb:
   enabled: false
