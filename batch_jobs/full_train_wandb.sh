@@ -4,7 +4,7 @@
 #BSUB -J full_train_only_02
 
 ### Queue Name:
-#BSUB -q gpuv100
+#BSUB -q "gpua10 gpua40 gpul40s gpuh100 gpua100"
 
 ### Requesting one host
 #BSUB -R "span[hosts=1]"
