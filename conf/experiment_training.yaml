@@ -19,6 +19,21 @@ training:
   short_context_steps: 512        # ~1.8 days
   prediction_length: 12           # 12 steps = 1 hour at 5-min freq
 
+  # Optional hierarchical length jitter.
+  # Batch mean is sampled with sigma_outer, per-sample lengths use sigma_inner.
+  length_jitter:
+    enabled: false
+    apply_in_val: false
+    long_sigma_outer: 320.0
+    long_sigma_inner: 96.0
+    short_sigma_outer: 40.0
+    short_sigma_inner: 16.0
+    quantize_steps: 24
+    long_min_steps: 1008
+    long_max_steps: 4032
+    short_min_steps: 384
+    short_max_steps: 640
+
   # Multi-query: multiple forecast origins per long context
   n_queries_per_context: 16
   query_stride_steps: 72          # 6 hours between forecast origins

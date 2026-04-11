@@ -8,6 +8,8 @@ Usage:
 
 from __future__ import annotations
 
+import math
+
 import hydra
 import pandas as pd
 import torch
@@ -15,7 +17,7 @@ from chronos import BaseChronosPipeline, Chronos2Pipeline
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
-from src.training.dataset import HypernetTrainingDataset, collate_training_batch
+from src.training.dataset import HypernetTrainingDataset, make_training_collate_fn
 from src.training.hypernet import HyperLoRA
 from src.training.trainer import HypernetTrainer
 from src.orchestration.context_encoder import ChronosContextEncoder
@@ -36,6 +38,10 @@ def _build_dataset(
     cfg: DictConfig,
     start_date: str,
     end_date: str,
+    long_context_min_steps: int | None = None,
+    long_context_max_steps: int | None = None,
+    short_context_min_steps: int | None = None,
+    short_context_max_steps: int | None = None,
 ) -> HypernetTrainingDataset:
     """Build a HypernetTrainingDataset from config."""
     t = cfg.training
@@ -44,6 +50,10 @@ def _build_dataset(
         long_context_steps=t.long_context_steps,
         short_context_steps=t.short_context_steps,
         prediction_length=t.prediction_length,
+        long_context_min_steps=long_context_min_steps,
+        long_context_max_steps=long_context_max_steps,
+        short_context_min_steps=short_context_min_steps,
+        short_context_max_steps=short_context_max_steps,
         n_queries_per_context=t.n_queries_per_context,
         query_stride_steps=t.query_stride_steps,
         long_context_stride_steps=t.long_context_stride_steps,
@@ -54,6 +64,36 @@ def _build_dataset(
         ts_col=cfg.timestamp_column,
         target_col=cfg.target,
     )
+
+
+def _resolve_bounds(
+    *,
+    base_steps: int,
+    sigma_outer: float,
+    sigma_inner: float,
+    min_steps: int | None,
+    max_steps: int | None,
+) -> tuple[int, int]:
+    """Resolve min/max bounds for length sampling.
+
+    If explicit bounds are not provided, uses +/- 3 sigma_total where
+    sigma_total = sqrt(sigma_outer^2 + sigma_inner^2).
+    """
+    sigma_total = math.sqrt(max(0.0, sigma_outer ** 2 + sigma_inner ** 2))
+    spread = int(round(3.0 * sigma_total))
+
+    if min_steps is None:
+        min_steps = max(1, int(base_steps) - spread)
+    if max_steps is None:
+        max_steps = max(int(base_steps), int(base_steps) + spread)
+
+    min_steps = int(min_steps)
+    max_steps = int(max_steps)
+    if min_steps <= 0:
+        raise ValueError("Resolved min_steps must be > 0")
+    if min_steps > max_steps:
+        raise ValueError("Resolved min_steps must be <= max_steps")
+    return min_steps, max_steps
 
 
 @hydra.main(
@@ -85,8 +125,116 @@ def main(cfg: DictConfig) -> None:
 
     # --- Build train/val datasets ---
     t = cfg.training
-    train_dataset = _build_dataset(df_long, cfg, t.train_start_date, t.train_end_date)
-    val_dataset = _build_dataset(df_long, cfg, t.val_start_date, t.val_end_date)
+    length_jitter_cfg = t.get("length_jitter", None)
+    jitter_enabled = bool(length_jitter_cfg and length_jitter_cfg.get("enabled", False))
+    jitter_apply_in_val = bool(
+        length_jitter_cfg and length_jitter_cfg.get("apply_in_val", False)
+    )
+
+    train_bounds = None
+    if jitter_enabled:
+        long_sigma_outer = float(length_jitter_cfg.get("long_sigma_outer", 0.0))
+        long_sigma_inner = float(length_jitter_cfg.get("long_sigma_inner", 0.0))
+        short_sigma_outer = float(length_jitter_cfg.get("short_sigma_outer", 0.0))
+        short_sigma_inner = float(length_jitter_cfg.get("short_sigma_inner", 0.0))
+
+        train_long_min, train_long_max = _resolve_bounds(
+            base_steps=int(t.long_context_steps),
+            sigma_outer=long_sigma_outer,
+            sigma_inner=long_sigma_inner,
+            min_steps=length_jitter_cfg.get("long_min_steps", None),
+            max_steps=length_jitter_cfg.get("long_max_steps", None),
+        )
+        train_short_min, train_short_max = _resolve_bounds(
+            base_steps=int(t.short_context_steps),
+            sigma_outer=short_sigma_outer,
+            sigma_inner=short_sigma_inner,
+            min_steps=length_jitter_cfg.get("short_min_steps", None),
+            max_steps=length_jitter_cfg.get("short_max_steps", None),
+        )
+        train_bounds = {
+            "long_context_min_steps": train_long_min,
+            "long_context_max_steps": train_long_max,
+            "short_context_min_steps": train_short_min,
+            "short_context_max_steps": train_short_max,
+        }
+
+    train_dataset = _build_dataset(
+        df_long,
+        cfg,
+        t.train_start_date,
+        t.train_end_date,
+        **(train_bounds or {}),
+    )
+
+    val_bounds = train_bounds if (jitter_enabled and jitter_apply_in_val) else None
+    val_dataset = _build_dataset(
+        df_long,
+        cfg,
+        t.val_start_date,
+        t.val_end_date,
+        **(val_bounds or {}),
+    )
+
+    train_collate_fn = make_training_collate_fn(
+        long_context_steps=t.long_context_steps,
+        short_context_steps=t.short_context_steps,
+        prediction_length=t.prediction_length,
+        n_queries_per_context=t.n_queries_per_context,
+        query_stride_steps=t.query_stride_steps,
+        length_jitter=(
+            {
+                "enabled": True,
+                "quantize_steps": int(length_jitter_cfg.get("quantize_steps", 1)),
+                "long_sigma_outer": float(length_jitter_cfg.get("long_sigma_outer", 0.0)),
+                "long_sigma_inner": float(length_jitter_cfg.get("long_sigma_inner", 0.0)),
+                "short_sigma_outer": float(length_jitter_cfg.get("short_sigma_outer", 0.0)),
+                "short_sigma_inner": float(length_jitter_cfg.get("short_sigma_inner", 0.0)),
+                "long_min_steps": train_bounds["long_context_min_steps"],
+                "long_max_steps": train_bounds["long_context_max_steps"],
+                "short_min_steps": train_bounds["short_context_min_steps"],
+                "short_max_steps": train_bounds["short_context_max_steps"],
+            }
+            if jitter_enabled
+            else None
+        ),
+    )
+    val_collate_fn = make_training_collate_fn(
+        long_context_steps=t.long_context_steps,
+        short_context_steps=t.short_context_steps,
+        prediction_length=t.prediction_length,
+        n_queries_per_context=t.n_queries_per_context,
+        query_stride_steps=t.query_stride_steps,
+        length_jitter=(
+            {
+                "enabled": True,
+                "quantize_steps": int(length_jitter_cfg.get("quantize_steps", 1)),
+                "long_sigma_outer": float(length_jitter_cfg.get("long_sigma_outer", 0.0)),
+                "long_sigma_inner": float(length_jitter_cfg.get("long_sigma_inner", 0.0)),
+                "short_sigma_outer": float(length_jitter_cfg.get("short_sigma_outer", 0.0)),
+                "short_sigma_inner": float(length_jitter_cfg.get("short_sigma_inner", 0.0)),
+                "long_min_steps": train_bounds["long_context_min_steps"],
+                "long_max_steps": train_bounds["long_context_max_steps"],
+                "short_min_steps": train_bounds["short_context_min_steps"],
+                "short_max_steps": train_bounds["short_context_max_steps"],
+            }
+            if (jitter_enabled and jitter_apply_in_val)
+            else None
+        ),
+    )
+
+    if jitter_enabled:
+        print("Length jitter enabled (hierarchical batch sampling):")
+        print(
+            "  long steps bounds: "
+            f"[{train_bounds['long_context_min_steps']}, {train_bounds['long_context_max_steps']}]"
+        )
+        print(
+            "  short steps bounds: "
+            f"[{train_bounds['short_context_min_steps']}, {train_bounds['short_context_max_steps']}]"
+        )
+        print(f"  apply in validation: {jitter_apply_in_val}")
+
     print(f"Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}")
     pin_memory = device == "cuda"
 
@@ -95,7 +243,7 @@ def main(cfg: DictConfig) -> None:
         batch_size=t.train_batch_size,
         shuffle=True,
         num_workers=t.num_workers,
-        collate_fn=collate_training_batch,
+        collate_fn=train_collate_fn,
         drop_last=True,
         pin_memory=pin_memory,
     )
@@ -104,7 +252,7 @@ def main(cfg: DictConfig) -> None:
         batch_size=t.train_batch_size,
         shuffle=False,
         num_workers=t.num_workers,
-        collate_fn=collate_training_batch,
+        collate_fn=val_collate_fn,
         pin_memory=pin_memory,
     )
 
