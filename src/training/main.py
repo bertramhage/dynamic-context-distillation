@@ -19,6 +19,7 @@ from torch.utils.data import DataLoader
 
 from src.training.dataset import HypernetTrainingDataset, make_training_collate_fn
 from src.training.hypernet import HyperLoRA
+from src.training.teacher_cache import load_or_build_teacher_cache
 from src.training.trainer import HypernetTrainer
 from src.orchestration.context_encoder import ChronosContextEncoder
 from src.utils import utils as shared_utils
@@ -94,6 +95,28 @@ def _resolve_bounds(
     if min_steps > max_steps:
         raise ValueError("Resolved min_steps must be <= max_steps")
     return min_steps, max_steps
+
+
+def _build_length_jitter_config(
+    length_jitter_cfg,
+    train_bounds: dict[str, int] | None,
+) -> dict | None:
+    """Build collate jitter config with resolved bounds."""
+    if length_jitter_cfg is None or train_bounds is None:
+        return None
+
+    return {
+        "enabled": True,
+        "quantize_steps": int(length_jitter_cfg.get("quantize_steps", 1)),
+        "long_sigma_outer": float(length_jitter_cfg.get("long_sigma_outer", 0.0)),
+        "long_sigma_inner": float(length_jitter_cfg.get("long_sigma_inner", 0.0)),
+        "short_sigma_outer": float(length_jitter_cfg.get("short_sigma_outer", 0.0)),
+        "short_sigma_inner": float(length_jitter_cfg.get("short_sigma_inner", 0.0)),
+        "long_min_steps": train_bounds["long_context_min_steps"],
+        "long_max_steps": train_bounds["long_context_max_steps"],
+        "short_min_steps": train_bounds["short_context_min_steps"],
+        "short_max_steps": train_bounds["short_context_max_steps"],
+    }
 
 
 @hydra.main(
@@ -176,28 +199,55 @@ def main(cfg: DictConfig) -> None:
         **(val_bounds or {}),
     )
 
+    # --- Load Chronos-2 (teacher/student predictions) ---
+    pipeline: Chronos2Pipeline = BaseChronosPipeline.from_pretrained(
+        "amazon/chronos-2", device_map=device,
+    )
+    print("Chronos-2 loaded")
+
+    teacher_model_name = str(getattr(pipeline.model.config, "_name_or_path", "amazon/chronos-2"))
+    train_jitter_cfg = _build_length_jitter_config(length_jitter_cfg, train_bounds)
+    val_jitter_cfg = (
+        _build_length_jitter_config(length_jitter_cfg, train_bounds)
+        if (jitter_enabled and jitter_apply_in_val)
+        else None
+    )
+
+    train_teacher_cache = load_or_build_teacher_cache(
+        split_name="train",
+        cfg=cfg,
+        dataset=train_dataset,
+        teacher_model=pipeline.model,
+        teacher_model_name=teacher_model_name,
+        device=device,
+        jitter_enabled=jitter_enabled,
+        jitter_cfg=train_jitter_cfg,
+    )
+    val_teacher_cache = load_or_build_teacher_cache(
+        split_name="val",
+        cfg=cfg,
+        dataset=val_dataset,
+        teacher_model=pipeline.model,
+        teacher_model_name=teacher_model_name,
+        device=device,
+        jitter_enabled=(jitter_enabled and jitter_apply_in_val),
+        jitter_cfg=val_jitter_cfg,
+    )
+
     train_collate_fn = make_training_collate_fn(
         long_context_steps=t.long_context_steps,
         short_context_steps=t.short_context_steps,
         prediction_length=t.prediction_length,
         n_queries_per_context=t.n_queries_per_context,
         query_stride_steps=t.query_stride_steps,
-        length_jitter=(
-            {
-                "enabled": True,
-                "quantize_steps": int(length_jitter_cfg.get("quantize_steps", 1)),
-                "long_sigma_outer": float(length_jitter_cfg.get("long_sigma_outer", 0.0)),
-                "long_sigma_inner": float(length_jitter_cfg.get("long_sigma_inner", 0.0)),
-                "short_sigma_outer": float(length_jitter_cfg.get("short_sigma_outer", 0.0)),
-                "short_sigma_inner": float(length_jitter_cfg.get("short_sigma_inner", 0.0)),
-                "long_min_steps": train_bounds["long_context_min_steps"],
-                "long_max_steps": train_bounds["long_context_max_steps"],
-                "short_min_steps": train_bounds["short_context_min_steps"],
-                "short_max_steps": train_bounds["short_context_max_steps"],
-            }
-            if jitter_enabled
-            else None
+        length_jitter=(train_jitter_cfg if train_teacher_cache is None else None),
+        fixed_long_steps=(
+            train_teacher_cache.sampled_long_steps if train_teacher_cache is not None else None
         ),
+        fixed_short_steps=(
+            train_teacher_cache.sampled_short_steps if train_teacher_cache is not None else None
+        ),
+        build_teacher_contexts=(train_teacher_cache is None),
     )
     val_collate_fn = make_training_collate_fn(
         long_context_steps=t.long_context_steps,
@@ -205,22 +255,14 @@ def main(cfg: DictConfig) -> None:
         prediction_length=t.prediction_length,
         n_queries_per_context=t.n_queries_per_context,
         query_stride_steps=t.query_stride_steps,
-        length_jitter=(
-            {
-                "enabled": True,
-                "quantize_steps": int(length_jitter_cfg.get("quantize_steps", 1)),
-                "long_sigma_outer": float(length_jitter_cfg.get("long_sigma_outer", 0.0)),
-                "long_sigma_inner": float(length_jitter_cfg.get("long_sigma_inner", 0.0)),
-                "short_sigma_outer": float(length_jitter_cfg.get("short_sigma_outer", 0.0)),
-                "short_sigma_inner": float(length_jitter_cfg.get("short_sigma_inner", 0.0)),
-                "long_min_steps": train_bounds["long_context_min_steps"],
-                "long_max_steps": train_bounds["long_context_max_steps"],
-                "short_min_steps": train_bounds["short_context_min_steps"],
-                "short_max_steps": train_bounds["short_context_max_steps"],
-            }
-            if (jitter_enabled and jitter_apply_in_val)
-            else None
+        length_jitter=(val_jitter_cfg if val_teacher_cache is None else None),
+        fixed_long_steps=(
+            val_teacher_cache.sampled_long_steps if val_teacher_cache is not None else None
         ),
+        fixed_short_steps=(
+            val_teacher_cache.sampled_short_steps if val_teacher_cache is not None else None
+        ),
+        build_teacher_contexts=(val_teacher_cache is None),
     )
 
     if jitter_enabled:
@@ -234,6 +276,17 @@ def main(cfg: DictConfig) -> None:
             f"[{train_bounds['short_context_min_steps']}, {train_bounds['short_context_max_steps']}]"
         )
         print(f"  apply in validation: {jitter_apply_in_val}")
+
+    if train_teacher_cache is not None:
+        print(
+            "Teacher cache (train): "
+            f"{train_teacher_cache.cache_path} (key={train_teacher_cache.cache_key})"
+        )
+    if val_teacher_cache is not None:
+        print(
+            "Teacher cache (val): "
+            f"{val_teacher_cache.cache_path} (key={val_teacher_cache.cache_key})"
+        )
 
     print(f"Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}")
     pin_memory = device == "cuda"
@@ -255,12 +308,6 @@ def main(cfg: DictConfig) -> None:
         collate_fn=val_collate_fn,
         pin_memory=pin_memory,
     )
-
-    # --- Load Chronos-2 (teacher/student predictions) ---
-    pipeline: Chronos2Pipeline = BaseChronosPipeline.from_pretrained(
-        "amazon/chronos-2", device_map=device,
-    )
-    print("Chronos-2 loaded")
 
     # --- Load context encoder model (embeddings for hypernetwork) ---
     context_model_name = cfg.get("context_encoder_model", "amazon/chronos-2")
@@ -307,6 +354,8 @@ def main(cfg: DictConfig) -> None:
         device=device,
         gradient_accumulation_steps=loop_cfg.gradient_accumulation_steps,
         warmup_steps=loop_cfg.warmup_steps,
+        train_teacher_cache=(train_teacher_cache.teacher_preds if train_teacher_cache else None),
+        val_teacher_cache=(val_teacher_cache.teacher_preds if val_teacher_cache else None),
     )
 
     # --- Train ---

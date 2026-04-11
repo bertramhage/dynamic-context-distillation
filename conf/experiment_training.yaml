@@ -75,6 +75,14 @@ training_loop:
   gradient_accumulation_steps: 2
   warmup_steps: 100
 
+teacher_cache:
+  enabled: true
+  cache_dir: data/teacher_cache
+  dtype: float16
+  build_batch_size: 64
+  jitter_seed: null               # defaults to global seed when null
+  rebuild: false
+
 wandb:
   enabled: false
   entity: null

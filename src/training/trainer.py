@@ -83,6 +83,8 @@ class HypernetTrainer:
         device: str = "cpu",
         gradient_accumulation_steps: int = 8,
         warmup_steps: int = 100,
+        train_teacher_cache: torch.Tensor | None = None,
+        val_teacher_cache: torch.Tensor | None = None,
     ):
         self.hypernetwork = hypernetwork.to(device)
         self.pipeline = pipeline
@@ -101,6 +103,8 @@ class HypernetTrainer:
 
         self.grad_accum_steps = gradient_accumulation_steps
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        self.train_teacher_cache = train_teacher_cache
+        self.val_teacher_cache = val_teacher_cache
 
         # Optimizer — only hypernetwork params
         self.optimizer = torch.optim.AdamW(
@@ -125,6 +129,16 @@ class HypernetTrainer:
         self.model.eval()
         for p in self.model.parameters():
             p.requires_grad = False
+
+    def _lookup_cached_teacher_preds(
+        self,
+        cache_tensor: torch.Tensor,
+        sample_indices: torch.Tensor,
+    ) -> torch.Tensor:
+        """Fetch cached teacher predictions for a batch of sample indices."""
+        cpu_idx = sample_indices.to(dtype=torch.int64, device="cpu")
+        cached = cache_tensor.index_select(0, cpu_idx)
+        return cached.to(self.device, dtype=torch.float32)
 
     @torch.no_grad()
     def _teacher_forward(
@@ -213,7 +227,7 @@ class HypernetTrainer:
         for batch_idx, batch in enumerate(self.train_loader):
             long_ctx = batch["long_context"].to(self.device)       # [B, long_len]
             short_ctx = batch["short_contexts"]                     # [B, Q, short_len]
-            teacher_ctx = batch["teacher_contexts"]                 # [B, Q, teacher_len]
+            sample_indices = batch["sample_indices"]
             prediction_length = batch["targets"].shape[-1]
 
             # 1. Encode long context through frozen context encoder
@@ -224,7 +238,13 @@ class HypernetTrainer:
             lora_dict = self.hypernetwork(ctx_features)
 
             # 3. Teacher predictions (cached, no grad)
-            teacher_preds = self._teacher_forward(teacher_ctx, prediction_length)
+            if self.train_teacher_cache is not None:
+                teacher_preds = self._lookup_cached_teacher_preds(
+                    self.train_teacher_cache, sample_indices,
+                )
+            else:
+                teacher_ctx = batch["teacher_contexts"]
+                teacher_preds = self._teacher_forward(teacher_ctx, prediction_length)
 
             # 4. Student predictions (grad flows through LoRA -> hypernetwork)
             student_preds = self._student_forward(short_ctx, lora_dict, prediction_length)
@@ -281,14 +301,20 @@ class HypernetTrainer:
         for batch in self.val_loader:
             long_ctx = batch["long_context"].to(self.device)
             short_ctx = batch["short_contexts"]
-            teacher_ctx = batch["teacher_contexts"]
+            sample_indices = batch["sample_indices"]
             prediction_length = batch["targets"].shape[-1]
 
             ctx_features = self.context_encoder.encode_last_hidden(long_ctx)
 
             lora_dict = self.hypernetwork(ctx_features)
 
-            teacher_preds = self._teacher_forward(teacher_ctx, prediction_length)
+            if self.val_teacher_cache is not None:
+                teacher_preds = self._lookup_cached_teacher_preds(
+                    self.val_teacher_cache, sample_indices,
+                )
+            else:
+                teacher_ctx = batch["teacher_contexts"]
+                teacher_preds = self._teacher_forward(teacher_ctx, prediction_length)
             student_preds = self._student_forward(short_ctx, lora_dict, prediction_length)
 
             loss = quantile_kl_divergence(teacher_preds, student_preds)
@@ -312,6 +338,9 @@ class HypernetTrainer:
         print(f"  Train batches: {len(self.train_loader)}")
         if self.val_loader:
             print(f"  Val batches: {len(self.val_loader)}")
+        print(f"  Train teacher cache: {self.train_teacher_cache is not None}")
+        if self.val_loader is not None:
+            print(f"  Val teacher cache: {self.val_teacher_cache is not None}")
         print(f"  Hypernetwork params: {sum(p.numel() for p in self.hypernetwork.parameters()):,}")
 
         for epoch in range(self.max_epochs):
