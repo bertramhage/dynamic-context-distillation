@@ -14,6 +14,11 @@ from src.evaluation.adapter_runtime import (
     apply_adapter,
     build_assignment_mapping,
 )
+from src.evaluation.dynamic_lora_runtime import (
+    apply_dynamic_lora_to_model,
+    has_non_base_adapters,
+    remove_dynamic_lora,
+)
 from src.utils.metrics import evaluation
 from src.utils import utils as shared_utils
 from src.utils.utils import calculate_metrics, metrics, probabilistic_metrics
@@ -120,11 +125,48 @@ def _print_runtime_metrics(runtime_stats: dict) -> None:
         print(f"  cpu_peak_rss_mb: {runtime_stats['cpu_peak_rss_mb']:.2f}")
 
 
+def _resolve_lora_scaling(cfg) -> float:
+    """Return LoRA scaling factor alpha/rank from config."""
+    adapter_cfg = getattr(cfg, "adapter", None)
+    if adapter_cfg is None:
+        return 2.0
+
+    rank = float(adapter_cfg.get("rank", 8))
+    alpha = float(adapter_cfg.get("alpha", 16))
+    if rank <= 0:
+        raise ValueError("adapter.rank must be > 0 to compute LoRA scaling.")
+    return alpha / rank
+
+
+def _predict_df_chunk(
+    pipeline: Chronos2Pipeline,
+    cfg,
+    context_df: pd.DataFrame,
+    future_df: pd.DataFrame | None,
+    prediction_length: int,
+    batch_size: int | None = None,
+) -> pd.DataFrame:
+    """Call Chronos predict_df with common evaluation arguments."""
+    kwargs = {
+        "future_df": future_df,
+        "prediction_length": prediction_length,
+        "quantile_levels": cfg.quantile_levels,
+        "id_column": cfg.id_column,
+        "timestamp_column": cfg.timestamp_column,
+        "target": cfg.target,
+        "cross_learning": cfg.cross_learning,
+    }
+    if batch_size is not None:
+        kwargs["batch_size"] = int(batch_size)
+    return pipeline.predict_df(context_df, **kwargs)
+
+
 def run_evaluation(
     cfg,
     pipeline: Chronos2Pipeline,
     df_long: pd.DataFrame,
     assignments_df: pd.DataFrame | None = None,
+    dynamic_lora_provider=None,
     return_runtime: bool = False,
 ) -> dict | tuple[dict, dict]:
     df_long = _maybe_subsample_stations(cfg, df_long)
@@ -217,6 +259,15 @@ def run_evaluation(
             if col not in context_columns:
                 context_columns.append(col)
 
+    evaluation_cfg = getattr(cfg, "evaluation", None)
+    use_dynamic_lora = bool(
+        evaluation_cfg is not None and evaluation_cfg.get("use_dynamic_lora", False)
+    )
+    dynamic_batch_size_cfg = None
+    if evaluation_cfg is not None:
+        dynamic_batch_size_cfg = evaluation_cfg.get("dynamic_batch_size")
+    dynamic_lora_scaling = _resolve_lora_scaling(cfg)
+
     for step_idx in range(1, total_steps + 1):
         context_start_time = current_pred_time - pd.Timedelta(minutes=history_length * freq)
         context_df = df_long[
@@ -254,67 +305,123 @@ def run_evaluation(
 
         step_assignments = pd.DataFrame(assignment_rows)
 
-        forecast_chunks = []
-        for adapter_id, group_df in step_assignments.groupby("adapter_id", sort=True):
-            group_item_ids = set(group_df[id_column].astype(str).tolist())
-            context_chunk = context_df[context_df[id_column].astype(str).isin(group_item_ids)]
-            if context_chunk.empty:
-                continue
+        if use_dynamic_lora:
+            adapter_by_item = {
+                str(row[id_column]): str(row["adapter_id"])
+                for row in assignment_rows
+            }
+            step_adapter_ids = [adapter_by_item[str(item)] for item in item_ids]
 
-            future_chunk = None
-            if future_df is not None:
-                future_chunk = future_df[future_df[id_column].astype(str).isin(group_item_ids)]
+            dynamic_batch_size = len(item_ids)
+            if dynamic_batch_size_cfg is not None:
+                dynamic_batch_size = int(dynamic_batch_size_cfg)
+            if dynamic_batch_size < len(item_ids):
+                raise ValueError(
+                    "evaluation.dynamic_batch_size must be >= number of items "
+                    "for dynamic LoRA evaluation."
+                )
 
-            use_base_model = apply_adapter(
-                pipeline=pipeline,
-                adapter_id=str(adapter_id),
-                cfg=cfg,
-                loaded_adapters=loaded_adapters,
-            )
+            start_t = time.perf_counter()
+            if has_non_base_adapters(step_adapter_ids, default_adapter_id):
+                if dynamic_lora_provider is None:
+                    raise ValueError(
+                        "Dynamic LoRA is enabled but no dynamic_lora_provider was provided."
+                    )
 
-            if use_base_model and isinstance(pipeline.model, PeftModel):
-                with pipeline.model.disable_adapter():
+                lora_batch = dynamic_lora_provider.get_step_lora_batch(
+                    prediction_time=pd.Timestamp(current_pred_time),
+                    item_ids=item_ids,
+                    adapter_ids=step_adapter_ids,
+                    default_adapter_id=default_adapter_id,
+                    device=pipeline.model.device,
+                )
+                patches = apply_dynamic_lora_to_model(
+                    model=pipeline.model,
+                    lora_batch=lora_batch,
+                    scaling=dynamic_lora_scaling,
+                )
+                try:
+                    forecast_df = _predict_df_chunk(
+                        pipeline=pipeline,
+                        cfg=cfg,
+                        context_df=context_df,
+                        future_df=future_df,
+                        prediction_length=prediction_length,
+                        batch_size=dynamic_batch_size,
+                    )
+                finally:
+                    remove_dynamic_lora(patches)
+            else:
+                forecast_df = _predict_df_chunk(
+                    pipeline=pipeline,
+                    cfg=cfg,
+                    context_df=context_df,
+                    future_df=future_df,
+                    prediction_length=prediction_length,
+                    batch_size=dynamic_batch_size,
+                )
+            elapsed = time.perf_counter() - start_t
+
+            tasks = len(item_ids)
+            if tasks > 0:
+                per_task_times.extend([elapsed / tasks] * tasks)
+                prediction_tasks += tasks
+            predict_backend_calls += 1
+        else:
+            forecast_chunks = []
+            for adapter_id, group_df in step_assignments.groupby("adapter_id", sort=True):
+                group_item_ids = set(group_df[id_column].astype(str).tolist())
+                context_chunk = context_df[context_df[id_column].astype(str).isin(group_item_ids)]
+                if context_chunk.empty:
+                    continue
+
+                future_chunk = None
+                if future_df is not None:
+                    future_chunk = future_df[future_df[id_column].astype(str).isin(group_item_ids)]
+
+                use_base_model = apply_adapter(
+                    pipeline=pipeline,
+                    adapter_id=str(adapter_id),
+                    cfg=cfg,
+                    loaded_adapters=loaded_adapters,
+                )
+
+                if use_base_model and isinstance(pipeline.model, PeftModel):
+                    with pipeline.model.disable_adapter():
+                        start_t = time.perf_counter()
+                        forecast_chunk = _predict_df_chunk(
+                            pipeline=pipeline,
+                            cfg=cfg,
+                            context_df=context_chunk,
+                            future_df=future_chunk,
+                            prediction_length=prediction_length,
+                        )
+                        elapsed = time.perf_counter() - start_t
+                else:
                     start_t = time.perf_counter()
-                    forecast_chunk = pipeline.predict_df(
-                        context_chunk,
+                    forecast_chunk = _predict_df_chunk(
+                        pipeline=pipeline,
+                        cfg=cfg,
+                        context_df=context_chunk,
                         future_df=future_chunk,
                         prediction_length=prediction_length,
-                        quantile_levels=cfg.quantile_levels,
-                        id_column=cfg.id_column,
-                        timestamp_column=cfg.timestamp_column,
-                        target=cfg.target,
-                        cross_learning=cfg.cross_learning,
                     )
                     elapsed = time.perf_counter() - start_t
-            else:
-                start_t = time.perf_counter()
-                forecast_chunk = pipeline.predict_df(
-                    context_chunk,
-                    future_df=future_chunk,
-                    prediction_length=prediction_length,
-                    quantile_levels=cfg.quantile_levels,
-                    id_column=cfg.id_column,
-                    timestamp_column=cfg.timestamp_column,
-                    target=cfg.target,
-                    cross_learning=cfg.cross_learning,
-                )
-                elapsed = time.perf_counter() - start_t
 
-            group_tasks = len(group_item_ids)
-            if group_tasks > 0:
-                per_task_times.extend([elapsed / group_tasks] * group_tasks)
-                prediction_tasks += group_tasks
-            predict_backend_calls += 1
+                group_tasks = len(group_item_ids)
+                if group_tasks > 0:
+                    per_task_times.extend([elapsed / group_tasks] * group_tasks)
+                    prediction_tasks += group_tasks
+                predict_backend_calls += 1
+                forecast_chunks.append(forecast_chunk)
 
-            if torch.backends.mps.is_available() and hasattr(torch.mps, "current_allocated_memory"):
-                mps_now_mb = torch.mps.current_allocated_memory() / (1024**2)
-                mps_peak_memory_mb = max(mps_peak_memory_mb, float(mps_now_mb))
+            if not forecast_chunks:
+                raise ValueError(f"No forecasts generated at step {step_idx}")
+            forecast_df = pd.concat(forecast_chunks, ignore_index=True)
 
-            forecast_chunks.append(forecast_chunk)
-
-        if not forecast_chunks:
-            raise ValueError(f"No forecasts generated at step {step_idx}")
-        forecast_df = pd.concat(forecast_chunks, ignore_index=True)
+        if torch.backends.mps.is_available() and hasattr(torch.mps, "current_allocated_memory"):
+            mps_now_mb = torch.mps.current_allocated_memory() / (1024**2)
+            mps_peak_memory_mb = max(mps_peak_memory_mb, float(mps_now_mb))
 
         preds = forecast_df[[id_column, timestamp_column, "predictions"]]
         true_vals = test_df[[id_column, timestamp_column, target]]

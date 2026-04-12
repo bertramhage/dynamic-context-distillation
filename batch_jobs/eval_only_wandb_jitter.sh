@@ -52,6 +52,7 @@ fi
 
 # Checkpoint path
 CHECKPOINT_PATH="checkpoints/jitter_01/best_hypernet.pt"
+DYNAMIC_BATCH_SIZE="${DYNAMIC_BATCH_SIZE:-null}"
 
 if [ ! -f "$CHECKPOINT_PATH" ]; then
   echo "Checkpoint not found at ${CHECKPOINT_PATH}"
@@ -71,8 +72,10 @@ uv run python -m src.orchestration.main \
   start_test_day=null \
   n_test_days=null \
   proportion_test=0.2 \
+  evaluation.use_dynamic_lora=true \
+  evaluation.dynamic_batch_size=${DYNAMIC_BATCH_SIZE} \
   wandb.enabled=true \
   "wandb.run_name=${ORCH_RUN_NAME}" \
-  "wandb.tags=[hpc,fullscale,orchestration,evaluation]"
+  "wandb.tags=[hpc,fullscale,orchestration,evaluation,dynamic_lora]"
 
 echo "Eval-only job finished successfully."

@@ -19,7 +19,7 @@ This document describes what is actually implemented now, not the full future sc
 
 **Outputs:** trained hypernetwork checkpoint (`best_hypernet.pt`, `final_hypernet.pt`).
 
-### Layer 2: Orchestration (not implemented yet)
+### Layer 2: Orchestration
 **Receives:** experiment config, checkpoints/artifacts, dataset splits.
 
 **Outputs:** in-memory evaluation dataset + in-memory adapter assignment mapping (prediction task -> adapter_id), then calls Layer 3.
@@ -27,7 +27,8 @@ This document describes what is actually implemented now, not the full future sc
 ### Layer 3: Evaluation
 The implementation is intentionally minimal and strict:
 - Adapter assignment is treated as an orchestrator-provided input.
-- LoRA adapters are applied to Chronos-2 using PEFT.
+- LoRA adapters can be applied either via PEFT (on-disk adapters) or via
+  dynamic in-memory batched LoRA injection.
 - Evaluation reports forecasting metrics and runtime/memory metrics.
 
 **Receives:**
@@ -55,6 +56,8 @@ The implementation is intentionally minimal and strict:
 - `stride_steps`, `start_test_day`, `n_test_days` / `proportion_test`: evaluation slicing.
 - `prediction_length`, `horizons`, `quantile_levels`: forecasting behavior.
 - `evaluation.history_length_steps`: explicit context length override.
+- `evaluation.use_dynamic_lora`: enables dynamic in-memory LoRA injection path.
+- `evaluation.dynamic_batch_size`: optional batch size for dynamic path; must be >= number of tasks in a step.
 - `adapter.*`: LoRA application settings (`adapter_root`, rank/alpha/targets, etc.).
 
 ### Key training cache config conventions
@@ -85,6 +88,7 @@ src/
   evaluation/
     __init__.py
     adapter_runtime.py
+    dynamic_lora_runtime.py
     main.py
   orchestration/
     __init__.py
@@ -210,9 +214,11 @@ uv run python -m src.training.main training.train_batch_size=8 training_loop.max
 The orchestration layer is a middleman between a trained hypernetwork (Layer 1 output) and the evaluation layer (Layer 3). Its job:
 
 1. **Load** dataset (`shared_utils.load_dataset`), Chronos-2 pipeline, hypernetwork checkpoint, and a configurable context-encoder model (`context_encoder_model`, default `amazon/chronos-bolt-mini`).
-2. **Generate LoRA adapters**: for each sensor, extract the long-history window from the dataset, encode it through the frozen context encoder to get last hidden states `[num_patches, d_model]`, run the hypernetwork to produce LoRA weight dicts, and save each adapter to disk as a PEFT-compatible directory.
+2. **Prepare adapter runtime inputs**:
+  - **PEFT mode** (`evaluation.use_dynamic_lora=false`): generate and save one adapter directory per assignment target, then evaluate via PEFT adapter switching.
+  - **Dynamic mode** (`evaluation.use_dynamic_lora=true`): keep hypernetwork outputs in memory and expose a step-wise provider that builds batched per-sample LoRA tensors for evaluation.
 3. **Build assignment_df**: a DataFrame mapping `(item_id, prediction_time) → adapter_id` for every evaluation step.
-4. **Call `run_evaluation`** with the short-context config, the generated assignment_df, and the pipeline.
+4. **Call `run_evaluation`** with short-context config, assignment_df, and optional dynamic LoRA provider.
 
 At runtime, orchestration validates context-encoder compatibility by checking that `context_pipeline.model.config.d_model` matches the hypernetwork's expected input width (`hypernetwork.perceiver.d_input`).
 
@@ -267,6 +273,7 @@ uv run python -m src.orchestration.main \
 ### Files
 - `src/evaluation/main.py`
 - `src/evaluation/adapter_runtime.py`
+- `src/evaluation/dynamic_lora_runtime.py`
 - Shared metric/data helpers in `src/utils/metrics.py` and `src/utils/utils.py`
 
 ### Exact coding choices implemented
@@ -284,23 +291,28 @@ uv run python -m src.orchestration.main \
 - Missing assignment for any prediction task raises an error.
 - No silent fallback for missing task mappings.
 
-4. **PEFT LoRA application**
+4. **PEFT LoRA application (default path)**
 - `ensure_peft_model(...)` wraps the base model with LoRA config only when needed.
 - `apply_adapter(...)` loads adapter from `adapter_root/<adapter_id>` if needed and activates it.
 - `adapter_id == "__none__"` triggers base-model path.
 
-5. **Grouped inference by adapter_id**
+5. **Grouped inference by adapter_id (PEFT path)**
 - Prediction tasks are grouped by adapter id per rolling step.
 - Each group runs one `predict_df` call over its station subset.
 - This avoids mixing different adapters in one forward pass.
 
-6. **Base model path under PEFT wrapper**
+6. **Dynamic in-memory LoRA path (optional)**
+- Enabled via `evaluation.use_dynamic_lora=true`.
+- Uses batched per-sample LoRA tensors directly (`[batch, n_layers, ...]`) and monkey-patches Chronos-2 TimeSelfAttention projections (`q/k/v/o`) for one batched inference call.
+- Supports mixed batches containing both adapter tasks and `__none__` base tasks by injecting zero-LoRA rows for base tasks.
+
+7. **Base model path under PEFT wrapper**
 - For `__none__` when model is PEFT-wrapped, inference runs inside `with pipeline.model.disable_adapter():`.
 
-7. **Metrics preserved from baseline style**
+8. **Metrics preserved from baseline style**
 - MAE/MAPE/RMSE/COVERAGE/IQR aggregation per horizon remains the same structure.
 
-8. **Runtime and memory metrics included**
+9. **Runtime and memory metrics included**
 - Latency is measured **per prediction task** (group call time divided by tasks in group), then aggregated.
 - Reported runtime fields:
   - `predict_backend_calls`
@@ -314,7 +326,7 @@ uv run python -m src.orchestration.main \
   - `cpu_peak_rss_mb` (platform-correct `ru_maxrss` handling)
 
 ### Public evaluation API (current)
-- `run_evaluation(cfg, pipeline, df_long, assignments_df=None, return_runtime=False)`
+- `run_evaluation(cfg, pipeline, df_long, assignments_df=None, dynamic_lora_provider=None, return_runtime=False)`
   - Returns metrics dict by default.
   - Returns `(metrics, runtime_stats)` when `return_runtime=True`.
 

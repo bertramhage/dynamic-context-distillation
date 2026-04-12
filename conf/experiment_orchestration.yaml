@@ -14,6 +14,10 @@ proportion_test: null
 
 quantile_levels: [0.1, 0.5, 0.9]
 
+evaluation:
+  use_dynamic_lora: false
+  dynamic_batch_size: null
+
 # Context encoder for hypernetwork input path.
 # Must match the model used when training the hypernetwork checkpoint.
 context_encoder_model: "amazon/chronos-bolt-mini"

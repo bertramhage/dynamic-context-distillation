@@ -16,6 +16,8 @@ quantile_levels: [0.1, 0.5, 0.9]
 
 evaluation:
   history_length_steps: 2016
+  use_dynamic_lora: false
+  dynamic_batch_size: null
 
 adapter:
   default_id: __none__
