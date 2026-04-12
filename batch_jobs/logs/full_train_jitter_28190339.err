@@ -1,0 +1,80 @@
+Loaded module: cuda/12.6.3
+Resolved 84 packages in 4ms
+Audited 81 packages in 23ms
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /zhome/ea/6/187439/.netrc.
+wandb: Currently logged in as: bertram-hage (bertram-hage-danmarks-tekniske-universitet-dtu) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run e7i31aq5
+wandb: Tracking run with wandb version 0.25.1
+wandb: Run data is saved locally in /zhome/ea/6/187439/advanced-ba/wandb/run-20260411_202501-e7i31aq5
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run training_jitter_train_jitter_28190339
+wandb: ⭐️ View project at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: 🚀 View run at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/e7i31aq5
+Error executing job with overrides: ['training.long_context_steps=4032', 'training.short_context_steps=256', 'training.query_stride_steps=72', 'training.train_batch_size=64', 'training.num_workers=4', 'training_loop.gradient_accumulation_steps=1', 'training.length_jitter.enabled=true', 'wandb.enabled=true', 'training_loop.checkpoint_dir=checkpoints/jitter_01', 'wandb.run_name=training_jitter_train_jitter_28190339', 'wandb.tags=[hpc,fullscale,training,jitter]']
+Traceback (most recent call last):
+  File "/zhome/ea/6/187439/advanced-ba/src/training/main.py", line 216, in main
+    train_teacher_cache = load_or_build_teacher_cache(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/src/training/teacher_cache.py", line 455, in load_or_build_teacher_cache
+    teacher_preds = _build_teacher_preds(
+                    ^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/src/training/teacher_cache.py", line 329, in _build_teacher_preds
+    batch_preds = _run_teacher_forward(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/src/training/teacher_cache.py", line 258, in _run_teacher_forward
+    out = teacher_model.forward(flat_ctx, num_output_patches=num_patches)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/chronos/chronos2/model.py", line 697, in forward
+    encoder_outputs, loc_scale, patched_future_covariates_mask, num_context_patches = self.encode(
+                                                                                      ^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/chronos/chronos2/model.py", line 610, in encode
+    encoder_outputs: Chronos2EncoderOutput = self.encoder(
+                                             ^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/chronos/chronos2/model.py", line 163, in forward
+    layer_outputs: Chronos2EncoderBlockOutput = layer_module(
+                                                ^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/chronos/chronos2/model.py", line 67, in forward
+    group_self_attn_outputs: AttentionOutput = self.layer[1](
+                                               ^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/chronos/chronos2/layers.py", line 359, in forward
+    attention_output: AttentionOutput = self.self_attention(
+                                        ^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/chronos/chronos2/layers.py", line 283, in forward
+    attn_output, attn_weights = self._sdpa_attention(query_states, key_states, value_states, mask)
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/chronos/chronos2/layers.py", line 216, in _sdpa_attention
+    attn_output = nn.functional.scaled_dot_product_attention(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 16.22 GiB. GPU 0 has a total capacity of 44.42 GiB of which 14.18 GiB is free. Including non-PyTorch memory, this process has 30.23 GiB memory in use. Of the allocated memory 25.21 GiB is allocated by PyTorch, and 4.71 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.

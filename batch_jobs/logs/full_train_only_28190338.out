@@ -1,0 +1,125 @@
+JobID: 28190338
+Host: n-62-18-4
+Project root: /zhome/ea/6/187439/advanced-ba
+Sat Apr 11 20:22:28 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.58.03              Driver Version: 595.58.03      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A40                     On  |   00000000:65:00.0 Off |                    0 |
+|  0%   27C    P0             38W /  300W |       0MiB /  46068MiB |      0%   E. Process |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+Running uv sync...
+Starting full-scale training run: training_train_28190338
+=== Hypernetwork Training ===
+dataset: PEMS-BAY
+start_date: '2017-01-01'
+start_test_day: null
+n_test_days: null
+proportion_test: 0.2
+freq: 5
+target: target
+future_covariates: null
+past_covariates: null
+prediction_length: 12
+id_column: item_id
+timestamp_column: timestamp
+horizons:
+- 15
+- 30
+- 60
+decimal_precision: 2
+metrics_to_show:
+- MAE
+- MAPE
+- RMSE
+- COVERAGE
+- IQR_MEAN
+dataset_cfg: dataset/PEMS-BAY
+cross_learning: true
+batch_size: null
+seed: 42
+training:
+  train_start_date: '2017-01-01'
+  train_end_date: '2017-04-01'
+  val_start_date: '2017-04-01'
+  val_end_date: '2017-05-01'
+  long_context_steps: 4032
+  short_context_steps: 256
+  prediction_length: 12
+  length_jitter:
+    enabled: false
+    apply_in_val: false
+    long_sigma_outer: 320.0
+    long_sigma_inner: 96.0
+    short_sigma_outer: 40.0
+    short_sigma_inner: 16.0
+    quantize_steps: 24
+    long_min_steps: 1008
+    long_max_steps: 4032
+    short_min_steps: 384
+    short_max_steps: 640
+  n_queries_per_context: 16
+  query_stride_steps: 72
+  long_context_stride_steps: 288
+  train_batch_size: 16
+  num_workers: 4
+context_encoder_model: amazon/chronos-bolt-mini
+hypernet:
+  d_latent: 128
+  lora_rank: 8
+  n_latent_queries: 32
+  num_perceiver_blocks: 1
+  n_self_attn_per_block: 1
+  n_heads: 8
+  num_pre_head_layers: 1
+  dropout: 0.0
+optimizer:
+  lr: 4.0e-05
+  weight_decay: 0.01
+training_loop:
+  max_epochs: 50
+  patience: 5
+  lora_scaling: 2.0
+  l1_reg_coef: 0.0
+  grad_clip: 1.0
+  log_every: 10
+  checkpoint_dir: checkpoints/training_02
+  gradient_accumulation_steps: 2
+  warmup_steps: 100
+teacher_cache:
+  enabled: true
+  cache_dir: data/teacher_cache
+  dtype: float16
+  build_batch_size: 64
+  jitter_seed: 42
+  rebuild: false
+wandb:
+  enabled: true
+  entity: null
+  run_name: training_train_28190338
+  tags:
+  - hpc
+  - fullscale
+  - training
+
+Device: cuda
+Loaded data shape: (52116, 325)
+Dataset loaded: 16937700 rows
+Chronos-2 loaded
+Building teacher cache for 'train' split (23400 samples, key=91ab4c6848994eec)
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33mtraining_train_28190338[0m at: [34mhttps://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/r5uibpch[0m
+[1;34mwandb[0m: Find logs at: [1;35mwandb/run-20260411_202248-r5uibpch/logs[0m

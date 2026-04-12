@@ -4,7 +4,7 @@
 #BSUB -J baseline_ctx_max_28d
 
 ### Queue Name:
-#BSUB -q "gpua10 gpua40 gpul40s gpuh100 gpuv100 gpua100"
+#BSUB -q "gpua10 gpul40s gpuh100 gpuv100 gpua100"
 
 ### Requesting one host
 #BSUB -R "span[hosts=1]"
@@ -17,7 +17,7 @@
 #BSUB -R "rusage[mem=4GB]"
 
 ### Runtime limit
-#BSUB -W 24:00
+#BSUB -W 6:00
 
 ### Email notification when job begins and ends
 #BSUB -B
@@ -59,7 +59,7 @@ echo "Using station subset fraction: ${SUBSET_FRACTION}"
 echo "Using station subset seed: ${SUBSET_SEED}"
 echo "Using run seed: ${BASE_SEED}"
 
-for cl in true false; do
+for cl in false; do
   if [ "$cl" = "true" ]; then
     cl_label="with_cl"
   else

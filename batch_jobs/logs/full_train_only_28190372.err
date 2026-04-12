@@ -1,0 +1,43 @@
+Loaded module: cuda/12.6.3
+Resolved 84 packages in 4ms
+Audited 81 packages in 26ms
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /zhome/ea/6/187439/.netrc.
+wandb: Currently logged in as: bertram-hage (bertram-hage-danmarks-tekniske-universitet-dtu) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run bkhcyt7j
+wandb: Tracking run with wandb version 0.25.1
+wandb: Run data is saved locally in /zhome/ea/6/187439/advanced-ba/wandb/run-20260411_203153-bkhcyt7j
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run training_train_28190372
+wandb: ⭐️ View project at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: 🚀 View run at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/bkhcyt7j
+wandb: updating run metadata
+wandb: uploading output.log; uploading wandb-summary.json
+wandb: uploading history steps 758-759, summary, console lines 802-807
+wandb: uploading data
+wandb: 
+wandb: Run history:
+wandb:      train/epoch ▁▁▁▁▁▂▂▂▂▂▃▃▃▄▄▄▄▅▅▅▅▅▆▆▆▆▆▆▆▆▇▇▇▇▇▇▇███
+wandb: train/epoch_loss █▅▅▄▄▃▃▃▂▂▂▂▂▂▁▁▁▁▁▁
+wandb: train/epoch_time ▂▁▆▆▆█▆▇▄▄▅▆▄▆▅▅▅▅▆▅
+wandb:       train/loss █▇▇▇▇▆▆▅▄▄▄▄▄▃▂▃▃▃▂▂▂▃▂▂▂▂▂▂▂▂▂▁▂▁▁▁▁▁▁▁
+wandb:         train/lr ▁▃████████████████████▇▇▇▇▇▇▇▆▆▆▆▆▆▆▅▅▅▅
+wandb:       train/step ▁▁▂▂▂▂▂▂▂▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▅▅▅▆▆▆▆▆▇▇▇█████
+wandb:        val/epoch ▁▁▂▂▂▃▃▄▄▄▅▅▅▆▆▇▇▇██
+wandb:   val/epoch_loss █▅▄▃▂▂▂▁▂▂▁▂▁▂▁▁▁▁▁▁
+wandb:         val/loss █▅▄▃▂▂▂▁▂▂▁▂▁▂▁▁▁▁▁▁
+wandb: 
+wandb: Run summary:
+wandb:      train/epoch 19
+wandb: train/epoch_loss 0.12395
+wandb: train/epoch_time 719.31216
+wandb:       train/loss 0.1237
+wandb:         train/lr 3e-05
+wandb:       train/step 7294
+wandb:        val/epoch 19
+wandb:   val/epoch_loss 0.4739
+wandb:         val/loss 0.4739
+wandb: 
+wandb: 🚀 View run training_train_28190372 at: https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/bkhcyt7j
+wandb: ⭐️ View project at: https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20260411_203153-bkhcyt7j/logs

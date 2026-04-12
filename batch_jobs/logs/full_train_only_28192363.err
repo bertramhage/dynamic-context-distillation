@@ -1,0 +1,20 @@
+Loaded module: cuda/12.6.3
+Resolved 84 packages in 363ms
+Audited 81 packages in 137ms
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/zhome/ea/6/187439/advanced-ba/src/training/main.py", line 15, in <module>
+    import torch
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/__init__.py", line 441, in <module>
+    _load_global_deps()
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/__init__.py", line 392, in _load_global_deps
+    _preload_cuda_deps()
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/__init__.py", line 359, in _preload_cuda_deps
+    _preload_cuda_lib(lib_folder, lib_name)
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/__init__.py", line 324, in _preload_cuda_lib
+    ctypes.CDLL(lib_path)
+  File "/zhome/ea/6/187439/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/ctypes/__init__.py", line 379, in __init__
+    self._handle = _dlopen(self._name, mode)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

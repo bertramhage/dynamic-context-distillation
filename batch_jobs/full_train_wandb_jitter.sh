@@ -4,7 +4,7 @@
 #BSUB -J full_train_jitter_01
 
 ### Queue Name:
-#BSUB -q "gpua10 gpua40 gpul40s gpuh100 gpua100"
+#BSUB -q "gpua40 gpul40s gpuh100 gpua100"
 
 ### Requesting one host
 #BSUB -R "span[hosts=1]"
@@ -63,6 +63,7 @@ uv run python -m src.training.main \
   training_loop.gradient_accumulation_steps=1 \
   training.length_jitter.enabled=true \
   wandb.enabled=true \
+  training_loop.checkpoint_dir=checkpoints/jitter_01 \
   "wandb.run_name=${TRAIN_RUN_NAME}" \
   "wandb.tags=[hpc,fullscale,training,jitter]"
 

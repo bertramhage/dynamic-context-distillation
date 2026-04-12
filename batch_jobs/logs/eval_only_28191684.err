@@ -1,0 +1,59 @@
+Loaded module: cuda/12.6.3
+Resolved 84 packages in 4ms
+Audited 81 packages in 29ms
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /zhome/ea/6/187439/.netrc.
+wandb: Currently logged in as: bertram-hage (bertram-hage-danmarks-tekniske-universitet-dtu) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run 6svk8ufz
+wandb: Tracking run with wandb version 0.25.1
+wandb: Run data is saved locally in /zhome/ea/6/187439/advanced-ba/wandb/run-20260412_100249-6svk8ufz
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run orchestration_eval_eval_28191684
+wandb: ⭐️ View project at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: 🚀 View run at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/6svk8ufz
+Error executing job with overrides: ['orchestration.checkpoint_path=checkpoints/jitter_01/best_hypernet.pt', 'orchestration.run_id=eval_28191684', 'orchestration.long_history_length_steps=8064', 'orchestration.short_context_length_steps=288', 'stride_steps=1', 'start_test_day=null', 'n_test_days=null', 'proportion_test=0.2', 'wandb.enabled=true', 'wandb.run_name=orchestration_eval_eval_28191684', 'wandb.tags=[hpc,fullscale,orchestration,evaluation]']
+Traceback (most recent call last):
+  File "/zhome/ea/6/187439/advanced-ba/src/orchestration/main.py", line 21, in main
+    horizon_metrics, runtime_stats = run_orchestration(cfg)
+                                     ^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/src/orchestration/run.py", line 251, in run_orchestration
+    lora_dict = hypernetwork(all_z)
+                ^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/src/training/hypernet.py", line 164, in forward
+    emb = self.perceiver(context)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/src/training/perceiver.py", line 222, in forward
+    context = self.input_proj(context)
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/src/training/perceiver.py", line 34, in forward
+    return self.down(F.silu(self.gate(x)) * self.up(x))
+                            ^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/nn/modules/linear.py", line 134, in forward
+    return F.linear(input, self.weight, self.bias)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Expected size for first two dimensions of batch2 tensor to be: [325, 768] but got: [325, 384].
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.

@@ -1,10 +1,10 @@
 #!/bin/sh
 
 ### Job Name:
-#BSUB -J full_train_only_02
+#BSUB -J full_train_only_03
 
 ### Queue Name:
-#BSUB -q "gpua10 gpua40 gpul40s gpuh100 gpua100"
+#BSUB -q "gpua40 gpul40s gpuh100 gpua100"
 
 ### Requesting one host
 #BSUB -R "span[hosts=1]"
@@ -58,10 +58,11 @@ uv run python -m src.training.main \
   training.long_context_steps=4032 \
   training.short_context_steps=256 \
   training.query_stride_steps=72 \
-  training.train_batch_size=16 \
+  training.train_batch_size=64 \
   training.num_workers=4 \
-  training_loop.gradient_accumulation_steps=2 \
+  training_loop.gradient_accumulation_steps=1 \
   wandb.enabled=true \
+  training_loop.checkpoint_dir=checkpoints/training_03 \
   "wandb.run_name=${TRAIN_RUN_NAME}" \
   "wandb.tags=[hpc,fullscale,training]"
 

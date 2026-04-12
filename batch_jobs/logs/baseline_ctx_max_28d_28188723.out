@@ -1,0 +1,181 @@
+JobID: 28188723
+Host: n-62-18-4
+Project root: /zhome/ea/6/187439/advanced-ba
+Sat Apr 11 14:33:41 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.58.03              Driver Version: 595.58.03      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A40                     On  |   00000000:65:00.0 Off |                    0 |
+|  0%   54C    P0             66W /  300W |       0MiB /  46068MiB |      0%   E. Process |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+Using station subset fraction: 0.4
+Using station subset seed: 42
+Using run seed: 42
+Running baseline max-context eval: 28d (8064 steps), cross_learning=true
+dataset: PEMS-BAY
+start_date: '2017-01-01'
+start_test_day: null
+n_test_days: null
+proportion_test: 0.2
+freq: 5
+target: target
+future_covariates: null
+past_covariates: null
+prediction_length: 12
+id_column: item_id
+timestamp_column: timestamp
+horizons:
+- 15
+- 30
+- 60
+decimal_precision: 2
+metrics_to_show:
+- MAE
+- MAPE
+- RMSE
+- COVERAGE
+- IQR_MEAN
+dataset_cfg: dataset/PEMS-BAY
+cross_learning: true
+batch_size: null
+stride_steps: 1
+seed: 42
+quantile_levels:
+- 0.1
+- 0.5
+- 0.9
+evaluation:
+  history_length_steps: 8064
+  station_subset_fraction: 0.4
+  station_subset_seed: 42
+wandb:
+  enabled: true
+  entity: null
+  run_name: baseline_maxctx28d_subset40_28188723_ctx_28d_with_cl
+  tags:
+  - baseline
+  - context_sweep
+
+Using device: cuda
+Loaded data shape: (52116, 325)
+Station subset enabled: 130/325 stations (40.00%), seed=42
+Testing from day 144 to day 180 (total 36 days)
+Final Average Metrics per Horizon:
+
+Horizon 15 minutes:
+  MAE: 1.47
+  MAPE: 3.2%
+  RMSE: 2.79
+  COVERAGE: 76.24%
+  IQR_MEAN: 4.05
+
+Horizon 30 minutes:
+  MAE: 1.7
+  MAPE: 3.94%
+  RMSE: 3.3
+  COVERAGE: 77.95%
+  IQR_MEAN: 4.85
+
+Horizon 60 minutes:
+  MAE: 1.91
+  MAPE: 4.65%
+  RMSE: 3.7
+  COVERAGE: 79.61%
+  IQR_MEAN: 5.68
+
+Average Across Horizons:
+  MAE: 1.69
+  MAPE: 3.93%
+  RMSE: 3.26
+  COVERAGE: 77.93%
+  IQR_MEAN: 4.86
+
+Runtime Metrics:
+  predict_backend_calls: 10356
+  prediction_tasks: 1346280
+  total_inference_seconds: 16404.1514
+  avg_task_inference_seconds: 0.012185
+  p95_task_inference_seconds: 0.012338
+  cuda_peak_memory_mb: 3026.16
+  cpu_peak_rss_mb: 3245.08
+Running baseline max-context eval: 28d (8064 steps), cross_learning=false
+dataset: PEMS-BAY
+start_date: '2017-01-01'
+start_test_day: null
+n_test_days: null
+proportion_test: 0.2
+freq: 5
+target: target
+future_covariates: null
+past_covariates: null
+prediction_length: 12
+id_column: item_id
+timestamp_column: timestamp
+horizons:
+- 15
+- 30
+- 60
+decimal_precision: 2
+metrics_to_show:
+- MAE
+- MAPE
+- RMSE
+- COVERAGE
+- IQR_MEAN
+dataset_cfg: dataset/PEMS-BAY
+cross_learning: false
+batch_size: null
+stride_steps: 1
+seed: 42
+quantile_levels:
+- 0.1
+- 0.5
+- 0.9
+evaluation:
+  history_length_steps: 8064
+  station_subset_fraction: 0.4
+  station_subset_seed: 42
+wandb:
+  enabled: true
+  entity: null
+  run_name: baseline_maxctx28d_subset40_28188723_ctx_28d_no_cl
+  tags:
+  - baseline
+  - context_sweep
+
+Using device: cuda
+Loaded data shape: (52116, 325)
+Station subset enabled: 130/325 stations (40.00%), seed=42
+Testing from day 144 to day 180 (total 36 days)
+[2026-04-11 19:53:40,929][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,930][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,930][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,930][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,931][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,931][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,931][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,931][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,931][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,931][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,931][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,932][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,932][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,932][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,932][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,932][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,932][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,932][asyncio][WARNING] - socket.send() raised exception.
+[2026-04-11 19:53:40,933][asyncio][WARNING] - socket.send() raised exception.

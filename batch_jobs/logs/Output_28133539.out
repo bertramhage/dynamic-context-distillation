@@ -1,0 +1,101 @@
+JobID: 28133539
+Host: n-62-12-21
+Thu Apr  2 16:21:55 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.58.03              Driver Version: 595.58.03      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A100-PCIE-40GB          On  |   00000000:86:00.0 Off |                    0 |
+| N/A   28C    P0             38W /  250W |       0MiB /  40960MiB |      0%   E. Process |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+dataset: PEMS-BAY
+start_date: '2017-01-01'
+start_test_day: null
+n_test_days: null
+proportion_test: 0.2
+freq: 5
+target: target
+future_covariates: null
+past_covariates: null
+prediction_length: 12
+id_column: item_id
+timestamp_column: timestamp
+horizons:
+- 15
+- 30
+- 60
+decimal_precision: 2
+metrics_to_show:
+- MAE
+- MAPE
+- RMSE
+- COVERAGE
+- IQR_MEAN
+dataset_cfg: dataset/PEMS-BAY
+cross_learning: true
+batch_size: null
+stride_steps: 1
+seed: 42
+quantile_levels:
+- 0.1
+- 0.5
+- 0.9
+wandb:
+  enabled: true
+  entity: null
+  run_name: baseline_1_0
+  tags: []
+
+Using device: cuda
+Loaded data shape: (52116, 325)
+Testing from day 144 to day 180 (total 36 days)
+Final Average Metrics per Horizon:
+
+Horizon 15 minutes:
+  MAE: 1.46
+  MAPE: 3.16%
+  RMSE: 2.81
+  COVERAGE: 76.36%
+  IQR_MEAN: 3.94
+
+Horizon 30 minutes:
+  MAE: 1.71
+  MAPE: 3.93%
+  RMSE: 3.34
+  COVERAGE: 78.0%
+  IQR_MEAN: 4.74
+
+Horizon 60 minutes:
+  MAE: 1.95
+  MAPE: 4.74%
+  RMSE: 3.78
+  COVERAGE: 79.47%
+  IQR_MEAN: 5.65
+
+Average Across Horizons:
+  MAE: 1.7
+  MAPE: 3.95%
+  RMSE: 3.31
+  COVERAGE: 77.94%
+  IQR_MEAN: 4.77
+
+Runtime Metrics:
+  predict_backend_calls: 10356
+  prediction_tasks: 3365700
+  total_inference_seconds: 9110.6679
+  avg_task_inference_seconds: 0.002707
+  p95_task_inference_seconds: 0.002708
+  cuda_peak_memory_mb: 2139.10
+  cpu_peak_rss_mb: 3247.52

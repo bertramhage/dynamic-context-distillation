@@ -1,0 +1,86 @@
+Loaded module: cuda/12.6.3
+Resolved 84 packages in 5ms
+Audited 81 packages in 103ms
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /zhome/ea/6/187439/.netrc.
+wandb: Currently logged in as: bertram-hage (bertram-hage-danmarks-tekniske-universitet-dtu) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run 8ic77gfz
+wandb: Tracking run with wandb version 0.25.1
+wandb: Run data is saved locally in /zhome/ea/6/187439/advanced-ba/wandb/run-20260411_222829-8ic77gfz
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run training_jitter_train_jitter_28190373
+wandb: ⭐️ View project at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: 🚀 View run at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/8ic77gfz
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/zhome/ea/6/187439/advanced-ba/src/training/main.py", line 369, in <module>
+    main()
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+           ^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+            ^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/hydra/_internal/hydra.py", line 119, in run
+    ret = run_job(
+          ^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/src/training/main.py", line 216, in main
+    train_teacher_cache = load_or_build_teacher_cache(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/src/training/teacher_cache.py", line 455, in load_or_build_teacher_cache
+    teacher_preds = _build_teacher_preds(
+                    ^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/src/training/teacher_cache.py", line 329, in _build_teacher_preds
+    batch_preds = _run_teacher_forward(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/src/training/teacher_cache.py", line 262, in _run_teacher_forward
+    return quantile_preds.reshape(batch_size, n_queries, n_quantiles, prediction_length).cpu()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+Exception ignored in atexit callback: <function _start_and_connect_service.<locals>.teardown_atexit at 0x7fa2aa644c20>
+Traceback (most recent call last):
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/wandb/sdk/lib/service/service_connection.py", line 73, in teardown_atexit
+    conn.teardown(hooks.exit_code)
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/wandb/sdk/lib/service/service_connection.py", line 344, in teardown
+    self._asyncer.run(publish_teardown_and_close)
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/wandb/sdk/lib/asyncio_manager.py", line 137, in run
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/concurrent/futures/_base.py", line 456, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/zhome/ea/6/187439/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/wandb/sdk/lib/asyncio_manager.py", line 220, in _wrap
+    return await fn()
+           ^^^^^^^^^^
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/wandb/sdk/lib/service/service_connection.py", line 335, in publish_teardown_and_close
+    await self._client.publish(
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/wandb/sdk/lib/service/service_client.py", line 45, in publish
+    await self._send_server_request(request)
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/wandb/sdk/lib/service/service_client.py", line 78, in _send_server_request
+    raise self._broken_exc.with_traceback(self._broken_tb)
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/wandb/sdk/lib/service/service_client.py", line 87, in _send_server_request
+    await self._drain_writer()
+  File "/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/wandb/sdk/lib/service/service_client.py", line 96, in _drain_writer
+    await self._writer.drain()
+  File "/zhome/ea/6/187439/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/asyncio/streams.py", line 392, in drain
+    await self._protocol._drain_helper()
+  File "/zhome/ea/6/187439/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/asyncio/streams.py", line 166, in _drain_helper
+    raise ConnectionResetError('Connection lost')
+ConnectionResetError: Connection lost

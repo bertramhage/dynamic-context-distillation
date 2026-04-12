@@ -1,0 +1,225 @@
+Loaded module: cuda/12.6.3
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /zhome/ea/6/187439/.netrc.
+wandb: Currently logged in as: bertram-hage (bertram-hage-danmarks-tekniske-universitet-dtu) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run wu3wyqw7
+wandb: Tracking run with wandb version 0.25.1
+wandb: Run data is saved locally in /zhome/ea/6/187439/advanced-ba/wandb/run-20260411_130053-wu3wyqw7
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run baseline_subset40_28188311_ctx_12h
+wandb: ⭐️ View project at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: 🚀 View run at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/wu3wyqw7
+/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/chronos/chronos2/dataset.py:89: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:213.)
+  task_target = torch.from_numpy(task_target)
+wandb: updating run metadata
+wandb: uploading output.log; uploading wandb-summary.json; uploading config.yaml
+wandb: uploading wandb-summary.json; uploading config.yaml
+wandb: 
+wandb: Run history:
+wandb:             eval/h15_COVERAGE ▆▆▆▇█▆▇▅▇▅▆▇▃▇▅▇▆▅▇▆▇▆▅▇█▆▄▆▇▇▄▇▄▄▇▆▅▁▆▆
+wandb: eval/h15_COVERAGE_running_avg ▁▄▆▆█████████▇▇▇▇███▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇
+wandb:                  eval/h15_MAE ▅▁▁▂▁▁▂▅▁▅▄▁▁▅▄▂▁█▅▅▂▂▇▁▃▁▁▂▄▁▁▂▁▅▇▁▂▆▂▂
+wandb:      eval/h15_MAE_running_avg █▃▂▂▁▁▁▁▂▂▂▂▂▁▁▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂
+wandb:                 eval/h15_MAPE ▁█▄▃▁▄▁▁▂▂▄▃▁▅▅▂▁▃▄▃▁▄▁▁▃▄▁▁▁▁▁▁▁▁▁▂▁▄▄▃
+wandb:     eval/h15_MAPE_running_avg █▅▅▅▃▂▂▂▂▁▁▂▂▂▂▂▂▂▃▃▂▂▂▂▂▂▃▂▃▃▃▂▂▃▃▃▃▃▃▃
+wandb:                 eval/h15_RMSE ▂▂▂▁▂▁▁█▃▄▂▁▂▂▁▂▅▁▂▅▃▂▁▁▂▂▁▆▁▁▂▂▄▃▁▃▁▄▆▃
+wandb:     eval/h15_RMSE_running_avg █▅▄▃▂▁▃▅▅▆▅▅▅▆▆▇█▇▇▇▆▇▇██▇▇▇▇▇▇▇▇██▇▇▇▇█
+wandb:             eval/h30_COVERAGE ▆▅█▆▅▃▄▅▆▅▄▅▄▄█▆█▁▅▃▆▄▇▇▃▇▆▂▆▁▃▇▅▆▅▄▂▄▃▅
+wandb: eval/h30_COVERAGE_running_avg ▃▁▆█▇▇▇▆▇▇▇▇▇▇▇███▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇
+wandb:                           +16 ...
+wandb: 
+wandb: Run summary:
+wandb:             eval/avg_COVERAGE 0.73641
+wandb:             eval/avg_IQR_MEAN 5.60394
+wandb:           eval/avg_IQR_MEDIAN 4.0912
+wandb:              eval/avg_IQR_STD 5.03547
+wandb:                  eval/avg_MAE 2.50337
+wandb:                 eval/avg_MAPE 0.0599
+wandb:                 eval/avg_RMSE 4.53756
+wandb:             eval/h15_COVERAGE 0.82308
+wandb: eval/h15_COVERAGE_running_avg 0.74826
+wandb:                  eval/h15_MAE 1.01722
+wandb:                           +30 ...
+wandb: 
+wandb: 🚀 View run baseline_subset40_28188311_ctx_12h at: https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/wu3wyqw7
+wandb: ⭐️ View project at: https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20260411_130053-wu3wyqw7/logs
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /zhome/ea/6/187439/.netrc.
+wandb: Currently logged in as: bertram-hage (bertram-hage-danmarks-tekniske-universitet-dtu) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run 5okb1sfd
+wandb: Tracking run with wandb version 0.25.1
+wandb: Run data is saved locally in /zhome/ea/6/187439/advanced-ba/wandb/run-20260411_133839-5okb1sfd
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run baseline_subset40_28188311_ctx_24h
+wandb: ⭐️ View project at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: 🚀 View run at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/5okb1sfd
+/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/chronos/chronos2/dataset.py:89: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:213.)
+  task_target = torch.from_numpy(task_target)
+wandb: updating run metadata
+wandb: uploading output.log; uploading wandb-summary.json; uploading config.yaml
+wandb: uploading history steps 10354-10355, summary, console lines 6-43
+wandb: 
+wandb: Run history:
+wandb:             eval/h15_COVERAGE ▆▆▆▆▅▅▆▄▅▇▇▁▆▆▄▄▆▅▄▆▆▇█▄▆▇▂█▆▃▆▅▇▃▄▇▆▆▇▃
+wandb: eval/h15_COVERAGE_running_avg ▁▄▃▅▆█████▆▆▆▇▇▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆
+wandb:                  eval/h15_MAE ▃▄▂▃▅▂▁▁▆▁▃▂▂▄█▂▂▃▄▁▂▂▂▂▂▂▁▂▂▅▄▂▂▃▂▂▁▂▂▂
+wandb:      eval/h15_MAE_running_avg ██▆▆▅▃▂▂▁▁▃▃▄▄▄▃▃▃▃▃▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+wandb:                 eval/h15_MAPE ▅▇▁▁▁▁▁▂▂▅▁▅▁▁▁▁▁▃▇▂▁▁▄▁▂▄█▁▁▄▃▂▆▁▂▁▁▂▄▃
+wandb:     eval/h15_MAPE_running_avg ▁██▇▄▄▃▂▃▄▄▄▃▃▃▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+wandb:                 eval/h15_RMSE ▄▄▄▁▁▁▄▃▂▁▁▁▁▅▅▂▂▂▅▂█▄▂▁▂▁▁▂▄▄▂▁▅▅▃▃▅▁▃▅
+wandb:     eval/h15_RMSE_running_avg █▅▄▄▃▂▁▂▃▃▃▃▃▃▃▃▃▃▃▃▄▄▃▃▃▃▃▃▄▃▃▃▃▃▄▄▃▃▃▄
+wandb:             eval/h30_COVERAGE ▆▅▆▁▃▆▆▆▃▅▅▇█▄▇▃▆▅▇▆▆▆▆▃▇▆▆▃▆▅▆▄█▄▆█▇▇█▇
+wandb: eval/h30_COVERAGE_running_avg ▁▃██▃▂▄▄▄▅▄▃▃▃▃▃▂▂▂▂▅▅▄▃▃▃▃▄▄▄▄▄▄▃▃▃▃▃▂▃
+wandb:                           +16 ...
+wandb: 
+wandb: Run summary:
+wandb:             eval/avg_COVERAGE 0.75752
+wandb:             eval/avg_IQR_MEAN 5.33365
+wandb:           eval/avg_IQR_MEDIAN 3.97416
+wandb:              eval/avg_IQR_STD 4.4724
+wandb:                  eval/avg_MAE 2.27804
+wandb:                 eval/avg_MAPE 0.05305
+wandb:                 eval/avg_RMSE 4.21351
+wandb:             eval/h15_COVERAGE 0.80769
+wandb: eval/h15_COVERAGE_running_avg 0.75661
+wandb:                  eval/h15_MAE 0.96605
+wandb:                           +30 ...
+wandb: 
+wandb: 🚀 View run baseline_subset40_28188311_ctx_24h at: https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/5okb1sfd
+wandb: ⭐️ View project at: https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20260411_133839-5okb1sfd/logs
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /zhome/ea/6/187439/.netrc.
+wandb: Currently logged in as: bertram-hage (bertram-hage-danmarks-tekniske-universitet-dtu) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run kgup8azj
+wandb: Tracking run with wandb version 0.25.1
+wandb: Run data is saved locally in /zhome/ea/6/187439/advanced-ba/wandb/run-20260411_142038-kgup8azj
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run baseline_subset40_28188311_ctx_2d
+wandb: ⭐️ View project at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: 🚀 View run at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/kgup8azj
+/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/chronos/chronos2/dataset.py:89: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:213.)
+  task_target = torch.from_numpy(task_target)
+wandb: updating run metadata
+wandb: uploading config.yaml; uploading output.log; uploading wandb-summary.json
+wandb: uploading history steps 10315-10355, summary, console lines 6-43
+wandb: 
+wandb: Run history:
+wandb:             eval/h15_COVERAGE ▆▆▄▅▇▇▆▇▃▅▃▆▆▅▅█▆█▃▄▅▆▅▅▇▆▄▄▃▅▆▃▅▅▄▄▄▄▁▆
+wandb: eval/h15_COVERAGE_running_avg ▁▅▅▇█▄▄▄▅▅▅▅▅▅▃▄▄▄▅▅▅▅▅▅▅▅▅▄▄▅▅▅▅▅▅▅▄▄▄▄
+wandb:                  eval/h15_MAE ▃▂▁▂▂▁▂▂▄▃▇▃▂▂▃▃▂▁▄▂▄▂▃▃▅▂▁▂▅▂▄█▆▂▂▇▃▅▄▂
+wandb:      eval/h15_MAE_running_avg ▇█▂▁▁▁▂▃▃▃▂▃▃▃▄▃▃▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+wandb:                 eval/h15_MAPE ▃▃▁▂▁▁▁▁▂▂▅▆▂▃▅▃▁▄▂▁▆▁▂▅█▇▂▁▂▁▄▁▁▃▃▁▄▂▂▅
+wandb:     eval/h15_MAPE_running_avg █▆▅▅▄▃▂▂▂▂▁▂▃▃▃▃▃▃▃▄▄▄▄▃▄▄▄▃▄▄▄▄▄▄▄▄▄▄▄▄
+wandb:                 eval/h15_RMSE ▁▃▂▄▁▅▂▁▇▂▁▁▁▂▁▃▅▃▁▃▁▄▁▅▄▄▂▂▁▇█▁▇▃▅▂▁▆▅▂
+wandb:     eval/h15_RMSE_running_avg █▇▅▃▂▂▁▃▃▃▄▄▃▃▃▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▅▄▄▄▄▄
+wandb:             eval/h30_COVERAGE ▅▇▄▅▇▃▆▆▇█▅▆▅▃▁▆▃▅█▃▇▃▄▆▅▅▇▃▄▄▃▅▅▆▆▇▃▇▇▇
+wandb: eval/h30_COVERAGE_running_avg ▅▅▇▆▇█▂▂▁▂▁▂▂▂▃▄▄▃▂▃▃▃▄▄▅▄▅▅▅▄▄▄▄▄▄▅▄▄▄▃
+wandb:                           +16 ...
+wandb: 
+wandb: Run summary:
+wandb:             eval/avg_COVERAGE 0.77584
+wandb:             eval/avg_IQR_MEAN 5.16716
+wandb:           eval/avg_IQR_MEDIAN 3.69485
+wandb:              eval/avg_IQR_STD 4.5657
+wandb:                  eval/avg_MAE 1.99475
+wandb:                 eval/avg_MAPE 0.0469
+wandb:                 eval/avg_RMSE 3.75067
+wandb:             eval/h15_COVERAGE 0.74615
+wandb: eval/h15_COVERAGE_running_avg 0.76542
+wandb:                  eval/h15_MAE 0.9653
+wandb:                           +30 ...
+wandb: 
+wandb: 🚀 View run baseline_subset40_28188311_ctx_2d at: https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/kgup8azj
+wandb: ⭐️ View project at: https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20260411_142038-kgup8azj/logs
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /zhome/ea/6/187439/.netrc.
+wandb: Currently logged in as: bertram-hage (bertram-hage-danmarks-tekniske-universitet-dtu) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run qrgi9yjt
+wandb: Tracking run with wandb version 0.25.1
+wandb: Run data is saved locally in /zhome/ea/6/187439/advanced-ba/wandb/run-20260411_151431-qrgi9yjt
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run baseline_subset40_28188311_ctx_7d
+wandb: ⭐️ View project at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: 🚀 View run at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/qrgi9yjt
+/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/chronos/chronos2/dataset.py:89: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:213.)
+  task_target = torch.from_numpy(task_target)
+wandb: updating run metadata
+wandb: uploading wandb-summary.json; uploading config.yaml; uploading output.log
+wandb: uploading wandb-summary.json; uploading output.log
+wandb: 
+wandb: Run history:
+wandb:             eval/h15_COVERAGE ▆▅▇▃▇▅▆▇▁▆▇▆▆▇▆▇▇▅▆██▄▆▆▆▇▇▇██▇▇▇▅▇▅▇▅▁▇
+wandb: eval/h15_COVERAGE_running_avg ▁▄▆▆▆█▆▆▆▆▆▆▆▆▆▆▇▇███▇▇▇▇▇▇▇▇▇▇████▇▇▇▇▇
+wandb:                  eval/h15_MAE ▇▃▁▃▃▃▂▂▂▆▅▁▃█▇▂▁▁▄▄▂▂▂▃▁▄▆█▂▅▂▂▁▂▂▃▅▆▁▅
+wandb:      eval/h15_MAE_running_avg ▁▇▇██▇▇▆▄▄▅▅▅▅▅▅▆▆▆▅▅▅▅▅▅▅▆▆▆▆▆▅▅▅▆▆▅▅▅▅
+wandb:                 eval/h15_MAPE ▇▁▁▃▂▁▁▁▁▁▁▂▅▂▁▁▇▅▁▂▇▁▃▂▁▆▁▆▁▁▂▁▁▁▆█▄▁▁▃
+wandb:     eval/h15_MAPE_running_avg ▁█▃▄▄▄▄▄▄▄▄▄▄▄▄▅▄▄▄▄▄▅▅▅▅▄▄▅▅▅▅▅▅▅▅▅▅▅▅▅
+wandb:                 eval/h15_RMSE ▂█▃▂▂▁▁▁▂▂▁▁▁▄▂▆▇▂▄▃▁█▄▁▂▁▁▁▂▁▆▆▂▂▁▃▂▇▂▂
+wandb:     eval/h15_RMSE_running_avg ▁█▇▇▇▇▅▅▅▅▅▆▆▆▅▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆▆
+wandb:             eval/h30_COVERAGE ▂▅▅▆▆▄▅▃▅▄▄█▆▅▆▄▅▃▄▆▃█▇▅▅▆▆▄▅▃▆▅▂▃▄▅▁▄▅▅
+wandb: eval/h30_COVERAGE_running_avg ▃▁▅▆▆███▇▇████▇▇▇▇██████████████████████
+wandb:                           +16 ...
+wandb: 
+wandb: Run summary:
+wandb:             eval/avg_COVERAGE 0.78083
+wandb:             eval/avg_IQR_MEAN 4.96611
+wandb:           eval/avg_IQR_MEDIAN 3.48466
+wandb:              eval/avg_IQR_STD 4.48548
+wandb:                  eval/avg_MAE 1.7681
+wandb:                 eval/avg_MAPE 0.04124
+wandb:                 eval/avg_RMSE 3.36998
+wandb:             eval/h15_COVERAGE 0.72308
+wandb: eval/h15_COVERAGE_running_avg 0.76507
+wandb:                  eval/h15_MAE 0.94813
+wandb:                           +30 ...
+wandb: 
+wandb: 🚀 View run baseline_subset40_28188311_ctx_7d at: https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/qrgi9yjt
+wandb: ⭐️ View project at: https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20260411_151431-qrgi9yjt/logs
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /zhome/ea/6/187439/.netrc.
+wandb: Currently logged in as: bertram-hage (bertram-hage-danmarks-tekniske-universitet-dtu) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run 5rm73093
+wandb: Tracking run with wandb version 0.25.1
+wandb: Run data is saved locally in /zhome/ea/6/187439/advanced-ba/wandb/run-20260411_171012-5rm73093
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run baseline_subset40_28188311_ctx_14d
+wandb: ⭐️ View project at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: 🚀 View run at https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/5rm73093
+/zhome/ea/6/187439/advanced-ba/.venv/lib/python3.12/site-packages/chronos/chronos2/dataset.py:89: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:213.)
+  task_target = torch.from_numpy(task_target)
+wandb: updating run metadata
+wandb: uploading wandb-summary.json; uploading config.yaml
+wandb: 
+wandb: Run history:
+wandb:             eval/h15_COVERAGE ▄▆▆▃▄▁▂▄▄▆▇▆▃▄▃▅▇▃▆▄▅▄▃▇█▆▇▄▅▅▃▅▆▇▃▆▇▄▅▆
+wandb: eval/h15_COVERAGE_running_avg ▁▇▇▇▇▆▆▆▆▆▇▇▇▇▇▇▇▇▇▇▇███████████████████
+wandb:                  eval/h15_MAE ▁▆▁▅▁▂▂▁▁▁▁▁▂▂▃▂▁▂▅▄▃▁▁▁▂▁▃▄▂▂▃▂▄▁█▁▁▁▇▂
+wandb:      eval/h15_MAE_running_avg █▇▃▃▁▁▃▃▄▄▄▅▅▄▄▄▃▅▅▅▅▅▅▅▅▄▅▅▅▅▅▅▅▅▅▅▅▅▅▅
+wandb:                 eval/h15_MAPE ▁▄▆▄▁▃▁▂▁▁▃▁▁▁▃▁▄▂█▂▅▁▁▂▆▅▁▁▂▁▁▁▄▁▁█▁▁▂▄
+wandb:     eval/h15_MAPE_running_avg █▅▅▃▃▂▁▁▂▂▃▃▃▂▂▂▂▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃▃
+wandb:                 eval/h15_RMSE ▁█▂▂▂▂▂▃▁▄▆▃▂▃▃▃▂█▆▁▁▁▄▂▄▁▂▅▄▄▆▅▅▁▂▂▁▄▂▂
+wandb:     eval/h15_RMSE_running_avg ▁▄██▇▄▄▃▄▄▄▅▅▅▅▄▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅▅
+wandb:             eval/h30_COVERAGE ▇▅▁▂▃▃▆▇█▇▄▆▄▄▃▆▄▆▆▅▅▅▅▆▄▆▆▃▄█▅▆▃▃▅▅▄▃▂▆
+wandb: eval/h30_COVERAGE_running_avg ▁▂▅▃▅▆▄▅▆▅▆▇▆▇▇▆▆▆▆▇▇▇▇▇▇▇▇███████▇▇▇▇▇▇
+wandb:                           +16 ...
+wandb: 
+wandb: Run summary:
+wandb:             eval/avg_COVERAGE 0.76476
+wandb:             eval/avg_IQR_MEAN 4.70608
+wandb:           eval/avg_IQR_MEDIAN 3.21093
+wandb:              eval/avg_IQR_STD 4.4545
+wandb:                  eval/avg_MAE 1.7024
+wandb:                 eval/avg_MAPE 0.03971
+wandb:                 eval/avg_RMSE 3.26852
+wandb:             eval/h15_COVERAGE 0.70769
+wandb: eval/h15_COVERAGE_running_avg 0.74906
+wandb:                  eval/h15_MAE 0.95436
+wandb:                           +30 ...
+wandb: 
+wandb: 🚀 View run baseline_subset40_28188311_ctx_14d at: https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba/runs/5rm73093
+wandb: ⭐️ View project at: https://wandb.ai/bertram-hage-danmarks-tekniske-universitet-dtu/advanced-ba
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20260411_171012-5rm73093/logs

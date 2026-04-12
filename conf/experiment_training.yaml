@@ -29,10 +29,10 @@ training:
     short_sigma_outer: 40.0
     short_sigma_inner: 16.0
     quantize_steps: 24
-    long_min_steps: 1008
-    long_max_steps: 4032
-    short_min_steps: 384
-    short_max_steps: 640
+    long_min_steps: 2016
+    long_max_steps: 8064
+    short_min_steps: 144
+    short_max_steps: 576
 
   # Multi-query: multiple forecast origins per long context
   n_queries_per_context: 16
@@ -57,7 +57,7 @@ hypernet:
   n_self_attn_per_block: 1
   n_heads: 8
   num_pre_head_layers: 1
-  dropout: 0.0
+  dropout: 0.1
 
 # --- Training hyperparams ---
 optimizer:
@@ -66,7 +66,7 @@ optimizer:
 
 training_loop:
   max_epochs: 50
-  patience: 5
+  patience: 10
   lora_scaling: 2.0               # alpha / rank = 16 / 8
   l1_reg_coef: 0.0
   grad_clip: 1.0
@@ -79,8 +79,8 @@ teacher_cache:
   enabled: true
   cache_dir: data/teacher_cache
   dtype: float16
-  build_batch_size: 64
-  jitter_seed: null               # defaults to global seed when null
+  build_batch_size: 32
+  jitter_seed: 42               # defaults to global seed when null
   rebuild: false
 
 wandb:

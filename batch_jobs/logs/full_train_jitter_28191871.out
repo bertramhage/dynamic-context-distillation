@@ -1,0 +1,584 @@
+JobID: 28191871
+Host: n-62-18-4
+Project root: /zhome/ea/6/187439/advanced-ba
+Sat Apr 11 22:48:40 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.58.03              Driver Version: 595.58.03      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA A40                     On  |   00000000:B1:00.0 Off |                    0 |
+|  0%   31C    P0             40W /  300W |       0MiB /  46068MiB |      0%   E. Process |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+Running uv sync...
+Starting full-scale training run with jitter: training_jitter_train_jitter_28191871
+=== Hypernetwork Training ===
+dataset: PEMS-BAY
+start_date: '2017-01-01'
+start_test_day: null
+n_test_days: null
+proportion_test: 0.2
+freq: 5
+target: target
+future_covariates: null
+past_covariates: null
+prediction_length: 12
+id_column: item_id
+timestamp_column: timestamp
+horizons:
+- 15
+- 30
+- 60
+decimal_precision: 2
+metrics_to_show:
+- MAE
+- MAPE
+- RMSE
+- COVERAGE
+- IQR_MEAN
+dataset_cfg: dataset/PEMS-BAY
+cross_learning: true
+batch_size: null
+seed: 42
+training:
+  train_start_date: '2017-01-01'
+  train_end_date: '2017-04-01'
+  val_start_date: '2017-04-01'
+  val_end_date: '2017-05-01'
+  long_context_steps: 4032
+  short_context_steps: 256
+  prediction_length: 12
+  length_jitter:
+    enabled: true
+    apply_in_val: false
+    long_sigma_outer: 320.0
+    long_sigma_inner: 96.0
+    short_sigma_outer: 40.0
+    short_sigma_inner: 16.0
+    quantize_steps: 24
+    long_min_steps: 2016
+    long_max_steps: 8064
+    short_min_steps: 144
+    short_max_steps: 576
+  n_queries_per_context: 16
+  query_stride_steps: 72
+  long_context_stride_steps: 288
+  train_batch_size: 64
+  num_workers: 4
+context_encoder_model: amazon/chronos-bolt-mini
+hypernet:
+  d_latent: 128
+  lora_rank: 8
+  n_latent_queries: 32
+  num_perceiver_blocks: 1
+  n_self_attn_per_block: 1
+  n_heads: 8
+  num_pre_head_layers: 1
+  dropout: 0.0
+optimizer:
+  lr: 4.0e-05
+  weight_decay: 0.01
+training_loop:
+  max_epochs: 50
+  patience: 5
+  lora_scaling: 2.0
+  l1_reg_coef: 0.0
+  grad_clip: 1.0
+  log_every: 10
+  checkpoint_dir: checkpoints/jitter_01
+  gradient_accumulation_steps: 1
+  warmup_steps: 100
+teacher_cache:
+  enabled: true
+  cache_dir: data/teacher_cache
+  dtype: float16
+  build_batch_size: 32
+  jitter_seed: 42
+  rebuild: false
+wandb:
+  enabled: true
+  entity: null
+  run_name: training_jitter_train_jitter_28191871
+  tags:
+  - hpc
+  - fullscale
+  - training
+  - jitter
+
+Device: cuda
+Loaded data shape: (52116, 325)
+Dataset loaded: 16937700 rows
+Chronos-2 loaded
+Building teacher cache for 'train' split (18525 samples, key=801c2d4c122c91de)
+  Teacher cache progress: 800/18525 samples
+  Teacher cache progress: 1600/18525 samples
+  Teacher cache progress: 2400/18525 samples
+  Teacher cache progress: 3200/18525 samples
+  Teacher cache progress: 4000/18525 samples
+  Teacher cache progress: 4800/18525 samples
+  Teacher cache progress: 5600/18525 samples
+  Teacher cache progress: 6400/18525 samples
+  Teacher cache progress: 7200/18525 samples
+  Teacher cache progress: 8000/18525 samples
+  Teacher cache progress: 8800/18525 samples
+  Teacher cache progress: 9600/18525 samples
+  Teacher cache progress: 10400/18525 samples
+  Teacher cache progress: 11200/18525 samples
+  Teacher cache progress: 12000/18525 samples
+  Teacher cache progress: 12800/18525 samples
+  Teacher cache progress: 13600/18525 samples
+  Teacher cache progress: 14400/18525 samples
+  Teacher cache progress: 15200/18525 samples
+  Teacher cache progress: 16000/18525 samples
+  Teacher cache progress: 16800/18525 samples
+  Teacher cache progress: 17600/18525 samples
+  Teacher cache progress: 18400/18525 samples
+  Teacher cache progress: 18525/18525 samples
+Saved teacher cache: data/teacher_cache/teacher_train_801c2d4c122c91de.pt
+Loading teacher cache: data/teacher_cache/teacher_val_943a728427f511a4.pt
+Length jitter enabled (hierarchical batch sampling):
+  long steps bounds: [2016, 8064]
+  short steps bounds: [144, 576]
+  apply in validation: False
+Teacher cache (train): data/teacher_cache/teacher_train_801c2d4c122c91de.pt (key=801c2d4c122c91de)
+Teacher cache (val): data/teacher_cache/teacher_val_943a728427f511a4.pt (key=943a728427f511a4)
+Train samples: 18525, Val samples: 3900
+Context encoder loaded: amazon/chronos-bolt-mini (d_model=384)
+Hypernetwork params: 12,180,992
+Starting training for up to 50 epochs
+  Train batches: 289
+  Val batches: 61
+  Train teacher cache: True
+  Val teacher cache: True
+  Hypernetwork params: 12,180,992
+  Epoch 0 [10/289] loss=1.412190 avg=1.459198
+  Epoch 0 [20/289] loss=1.357663 avg=1.412130
+  Epoch 0 [30/289] loss=1.036144 avg=1.659915
+  Epoch 0 [40/289] loss=1.156270 avg=1.785803
+  Epoch 0 [50/289] loss=1.163939 avg=1.658488
+  Epoch 0 [60/289] loss=1.051223 avg=1.548393
+  Epoch 0 [70/289] loss=0.863676 avg=1.459858
+  Epoch 0 [80/289] loss=0.993442 avg=1.390649
+  Epoch 0 [90/289] loss=0.817574 avg=1.330126
+  Epoch 0 [100/289] loss=0.745817 avg=1.281449
+  Epoch 0 [110/289] loss=0.748452 avg=1.238661
+  Epoch 0 [120/289] loss=0.816868 avg=1.204178
+  Epoch 0 [130/289] loss=0.948080 avg=1.172663
+  Epoch 0 [140/289] loss=0.842916 avg=1.147289
+  Epoch 0 [150/289] loss=0.704928 avg=1.121264
+  Epoch 0 [160/289] loss=0.808428 avg=1.096640
+  Epoch 0 [170/289] loss=0.781318 avg=1.078122
+  Epoch 0 [180/289] loss=0.567603 avg=1.060150
+  Epoch 0 [190/289] loss=0.808695 avg=1.046739
+  Epoch 0 [200/289] loss=0.704315 avg=1.034914
+  Epoch 0 [210/289] loss=0.608606 avg=1.019847
+  Epoch 0 [220/289] loss=0.666766 avg=1.005301
+  Epoch 0 [230/289] loss=0.865087 avg=0.991343
+  Epoch 0 [240/289] loss=0.672790 avg=0.978799
+  Epoch 0 [250/289] loss=0.681307 avg=0.966734
+  Epoch 0 [260/289] loss=0.793358 avg=0.957308
+  Epoch 0 [270/289] loss=0.778284 avg=0.947759
+  Epoch 0 [280/289] loss=0.831039 avg=0.941057
+Epoch 0: train_loss=0.934435 val_loss=0.733851 time=728.4s
+  Saved best checkpoint (val_loss=0.733851)
+  Epoch 1 [10/289] loss=0.547917 avg=0.688548
+  Epoch 1 [20/289] loss=0.624903 avg=0.677232
+  Epoch 1 [30/289] loss=0.626253 avg=0.674801
+  Epoch 1 [40/289] loss=0.675245 avg=0.677575
+  Epoch 1 [50/289] loss=0.614437 avg=0.676838
+  Epoch 1 [60/289] loss=0.662305 avg=0.674857
+  Epoch 1 [70/289] loss=0.760435 avg=0.677792
+  Epoch 1 [80/289] loss=0.646142 avg=0.675953
+  Epoch 1 [90/289] loss=0.695607 avg=0.675906
+  Epoch 1 [100/289] loss=0.791446 avg=0.673823
+  Epoch 1 [110/289] loss=0.580613 avg=0.671868
+  Epoch 1 [120/289] loss=0.632044 avg=0.668394
+  Epoch 1 [130/289] loss=0.558167 avg=0.665847
+  Epoch 1 [140/289] loss=0.572838 avg=0.663795
+  Epoch 1 [150/289] loss=0.576634 avg=0.660372
+  Epoch 1 [160/289] loss=0.766442 avg=0.660085
+  Epoch 1 [170/289] loss=0.561415 avg=0.657439
+  Epoch 1 [180/289] loss=0.651880 avg=0.656564
+  Epoch 1 [190/289] loss=0.626582 avg=0.655883
+  Epoch 1 [200/289] loss=0.757220 avg=0.653944
+  Epoch 1 [210/289] loss=0.774270 avg=0.651842
+  Epoch 1 [220/289] loss=0.548612 avg=0.651046
+  Epoch 1 [230/289] loss=0.693312 avg=0.649965
+  Epoch 1 [240/289] loss=0.595472 avg=0.648964
+  Epoch 1 [250/289] loss=0.707780 avg=0.649077
+  Epoch 1 [260/289] loss=0.686383 avg=0.647956
+  Epoch 1 [270/289] loss=0.721475 avg=0.647276
+  Epoch 1 [280/289] loss=0.582117 avg=0.646792
+Epoch 1: train_loss=0.645848 val_loss=0.700422 time=726.7s
+  Saved best checkpoint (val_loss=0.700422)
+  Epoch 2 [10/289] loss=0.574302 avg=0.604605
+  Epoch 2 [20/289] loss=0.684536 avg=0.605526
+  Epoch 2 [30/289] loss=0.648094 avg=0.609554
+  Epoch 2 [40/289] loss=0.631934 avg=0.603632
+  Epoch 2 [50/289] loss=0.587115 avg=0.603738
+  Epoch 2 [60/289] loss=0.531560 avg=0.602884
+  Epoch 2 [70/289] loss=0.519456 avg=0.601084
+  Epoch 2 [80/289] loss=0.589882 avg=0.600805
+  Epoch 2 [90/289] loss=0.647337 avg=0.600958
+  Epoch 2 [100/289] loss=0.648251 avg=0.599207
+  Epoch 2 [110/289] loss=0.521504 avg=0.597322
+  Epoch 2 [120/289] loss=0.586574 avg=0.597323
+  Epoch 2 [130/289] loss=0.700185 avg=0.595828
+  Epoch 2 [140/289] loss=0.573177 avg=0.594166
+  Epoch 2 [150/289] loss=0.477330 avg=0.594787
+  Epoch 2 [160/289] loss=0.516409 avg=0.593622
+  Epoch 2 [170/289] loss=0.603866 avg=0.593182
+  Epoch 2 [180/289] loss=0.539676 avg=0.591521
+  Epoch 2 [190/289] loss=0.539754 avg=0.589059
+  Epoch 2 [200/289] loss=0.599955 avg=0.588430
+  Epoch 2 [210/289] loss=0.615758 avg=0.588075
+  Epoch 2 [220/289] loss=0.632314 avg=0.588135
+  Epoch 2 [230/289] loss=0.751683 avg=0.588740
+  Epoch 2 [240/289] loss=0.697433 avg=0.588852
+  Epoch 2 [250/289] loss=0.602375 avg=0.589692
+  Epoch 2 [260/289] loss=0.495058 avg=0.589164
+  Epoch 2 [270/289] loss=0.597612 avg=0.589378
+  Epoch 2 [280/289] loss=0.590075 avg=0.589704
+Epoch 2: train_loss=0.588331 val_loss=0.649999 time=728.6s
+  Saved best checkpoint (val_loss=0.649999)
+  Epoch 3 [10/289] loss=0.597357 avg=0.553296
+  Epoch 3 [20/289] loss=0.569672 avg=0.565653
+  Epoch 3 [30/289] loss=0.514879 avg=0.551609
+  Epoch 3 [40/289] loss=0.637205 avg=0.560997
+  Epoch 3 [50/289] loss=0.498565 avg=0.559734
+  Epoch 3 [60/289] loss=0.470376 avg=0.565387
+  Epoch 3 [70/289] loss=0.515934 avg=0.560437
+  Epoch 3 [80/289] loss=0.481064 avg=0.561800
+  Epoch 3 [90/289] loss=0.549598 avg=0.558748
+  Epoch 3 [100/289] loss=0.555477 avg=0.558238
+  Epoch 3 [110/289] loss=0.532137 avg=0.556900
+  Epoch 3 [120/289] loss=0.584062 avg=0.555165
+  Epoch 3 [130/289] loss=0.454351 avg=0.552497
+  Epoch 3 [140/289] loss=0.632623 avg=0.553560
+  Epoch 3 [150/289] loss=0.613090 avg=0.552592
+  Epoch 3 [160/289] loss=0.572582 avg=0.553493
+  Epoch 3 [170/289] loss=0.563847 avg=0.552280
+  Epoch 3 [180/289] loss=0.552468 avg=0.552353
+  Epoch 3 [190/289] loss=0.472978 avg=0.549603
+  Epoch 3 [200/289] loss=0.502280 avg=0.549614
+  Epoch 3 [210/289] loss=0.451672 avg=0.549615
+  Epoch 3 [220/289] loss=0.548811 avg=0.548249
+  Epoch 3 [230/289] loss=0.598982 avg=0.548196
+  Epoch 3 [240/289] loss=0.457237 avg=0.549301
+  Epoch 3 [250/289] loss=0.559699 avg=0.548338
+  Epoch 3 [260/289] loss=0.450664 avg=0.547728
+  Epoch 3 [270/289] loss=0.612997 avg=0.547876
+  Epoch 3 [280/289] loss=0.502062 avg=0.547286
+Epoch 3: train_loss=0.546669 val_loss=0.637642 time=728.5s
+  Saved best checkpoint (val_loss=0.637642)
+  Epoch 4 [10/289] loss=0.479575 avg=0.516868
+  Epoch 4 [20/289] loss=0.482695 avg=0.503708
+  Epoch 4 [30/289] loss=0.627648 avg=0.500109
+  Epoch 4 [40/289] loss=0.490016 avg=0.504045
+  Epoch 4 [50/289] loss=0.672029 avg=0.515407
+  Epoch 4 [60/289] loss=0.544978 avg=0.516826
+  Epoch 4 [70/289] loss=0.571841 avg=0.515492
+  Epoch 4 [80/289] loss=0.501864 avg=0.516454
+  Epoch 4 [90/289] loss=0.497575 avg=0.514958
+  Epoch 4 [100/289] loss=0.536125 avg=0.519362
+  Epoch 4 [110/289] loss=0.508356 avg=0.520502
+  Epoch 4 [120/289] loss=0.530291 avg=0.520989
+  Epoch 4 [130/289] loss=0.497345 avg=0.520450
+  Epoch 4 [140/289] loss=0.439858 avg=0.520426
+  Epoch 4 [150/289] loss=0.460416 avg=0.518969
+  Epoch 4 [160/289] loss=0.543495 avg=0.519356
+  Epoch 4 [170/289] loss=0.464206 avg=0.518032
+  Epoch 4 [180/289] loss=0.550573 avg=0.517509
+  Epoch 4 [190/289] loss=0.539797 avg=0.517506
+  Epoch 4 [200/289] loss=0.564578 avg=0.517158
+  Epoch 4 [210/289] loss=0.444205 avg=0.516038
+  Epoch 4 [220/289] loss=0.618259 avg=0.516136
+  Epoch 4 [230/289] loss=0.518865 avg=0.515819
+  Epoch 4 [240/289] loss=0.619450 avg=0.515201
+  Epoch 4 [250/289] loss=0.492665 avg=0.516121
+  Epoch 4 [260/289] loss=0.479228 avg=0.515544
+  Epoch 4 [270/289] loss=0.453865 avg=0.515579
+  Epoch 4 [280/289] loss=0.389615 avg=0.514465
+Epoch 4: train_loss=0.513609 val_loss=0.636405 time=731.1s
+  Saved best checkpoint (val_loss=0.636405)
+  Epoch 5 [10/289] loss=0.533290 avg=0.485451
+  Epoch 5 [20/289] loss=0.475161 avg=0.482037
+  Epoch 5 [30/289] loss=0.471324 avg=0.480090
+  Epoch 5 [40/289] loss=0.520042 avg=0.478948
+  Epoch 5 [50/289] loss=0.566184 avg=0.484647
+  Epoch 5 [60/289] loss=0.424059 avg=0.485280
+  Epoch 5 [70/289] loss=0.502683 avg=0.487837
+  Epoch 5 [80/289] loss=0.605554 avg=0.491528
+  Epoch 5 [90/289] loss=0.615032 avg=0.492336
+  Epoch 5 [100/289] loss=0.404232 avg=0.490239
+  Epoch 5 [110/289] loss=0.446666 avg=0.491743
+  Epoch 5 [120/289] loss=0.555967 avg=0.491159
+  Epoch 5 [130/289] loss=0.415482 avg=0.490876
+  Epoch 5 [140/289] loss=0.400851 avg=0.491041
+  Epoch 5 [150/289] loss=0.455143 avg=0.489207
+  Epoch 5 [160/289] loss=0.408204 avg=0.487861
+  Epoch 5 [170/289] loss=0.554291 avg=0.486696
+  Epoch 5 [180/289] loss=0.401482 avg=0.485961
+  Epoch 5 [190/289] loss=0.548788 avg=0.486621
+  Epoch 5 [200/289] loss=0.457314 avg=0.486497
+  Epoch 5 [210/289] loss=0.469753 avg=0.485518
+  Epoch 5 [220/289] loss=0.461306 avg=0.484346
+  Epoch 5 [230/289] loss=0.537221 avg=0.484994
+  Epoch 5 [240/289] loss=0.510114 avg=0.484969
+  Epoch 5 [250/289] loss=0.553465 avg=0.485840
+  Epoch 5 [260/289] loss=0.438092 avg=0.485547
+  Epoch 5 [270/289] loss=0.434183 avg=0.484439
+  Epoch 5 [280/289] loss=0.455144 avg=0.484489
+Epoch 5: train_loss=0.484245 val_loss=0.623982 time=728.5s
+  Saved best checkpoint (val_loss=0.623982)
+  Epoch 6 [10/289] loss=0.441580 avg=0.462987
+  Epoch 6 [20/289] loss=0.496133 avg=0.457359
+  Epoch 6 [30/289] loss=0.407918 avg=0.459235
+  Epoch 6 [40/289] loss=0.405837 avg=0.461086
+  Epoch 6 [50/289] loss=0.472670 avg=0.457149
+  Epoch 6 [60/289] loss=0.435216 avg=0.456559
+  Epoch 6 [70/289] loss=0.435120 avg=0.454911
+  Epoch 6 [80/289] loss=0.490614 avg=0.457634
+  Epoch 6 [90/289] loss=0.443907 avg=0.459360
+  Epoch 6 [100/289] loss=0.388431 avg=0.459617
+  Epoch 6 [110/289] loss=0.513774 avg=0.460626
+  Epoch 6 [120/289] loss=0.480463 avg=0.460133
+  Epoch 6 [130/289] loss=0.448279 avg=0.459523
+  Epoch 6 [140/289] loss=0.451458 avg=0.459049
+  Epoch 6 [150/289] loss=0.461361 avg=0.458556
+  Epoch 6 [160/289] loss=0.510626 avg=0.458281
+  Epoch 6 [170/289] loss=0.477217 avg=0.459576
+  Epoch 6 [180/289] loss=0.489171 avg=0.460292
+  Epoch 6 [190/289] loss=0.535961 avg=0.461687
+  Epoch 6 [200/289] loss=0.429173 avg=0.461394
+  Epoch 6 [210/289] loss=0.433403 avg=0.460807
+  Epoch 6 [220/289] loss=0.503271 avg=0.460424
+  Epoch 6 [230/289] loss=0.461178 avg=0.459919
+  Epoch 6 [240/289] loss=0.470414 avg=0.459109
+  Epoch 6 [250/289] loss=0.411810 avg=0.458787
+  Epoch 6 [260/289] loss=0.467474 avg=0.458033
+  Epoch 6 [270/289] loss=0.414339 avg=0.457538
+  Epoch 6 [280/289] loss=0.507162 avg=0.456844
+Epoch 6: train_loss=0.456662 val_loss=0.625913 time=727.0s
+  Epoch 7 [10/289] loss=0.464558 avg=0.422431
+  Epoch 7 [20/289] loss=0.444476 avg=0.443912
+  Epoch 7 [30/289] loss=0.377545 avg=0.445737
+  Epoch 7 [40/289] loss=0.437226 avg=0.443451
+  Epoch 7 [50/289] loss=0.374173 avg=0.441102
+  Epoch 7 [60/289] loss=0.470560 avg=0.437087
+  Epoch 7 [70/289] loss=0.371651 avg=0.433793
+  Epoch 7 [80/289] loss=0.472275 avg=0.433630
+  Epoch 7 [90/289] loss=0.392747 avg=0.430927
+  Epoch 7 [100/289] loss=0.434951 avg=0.429966
+  Epoch 7 [110/289] loss=0.420837 avg=0.431298
+  Epoch 7 [120/289] loss=0.432195 avg=0.430612
+  Epoch 7 [130/289] loss=0.416541 avg=0.431150
+  Epoch 7 [140/289] loss=0.406237 avg=0.431828
+  Epoch 7 [150/289] loss=0.490329 avg=0.432189
+  Epoch 7 [160/289] loss=0.457610 avg=0.433188
+  Epoch 7 [170/289] loss=0.415366 avg=0.433340
+  Epoch 7 [180/289] loss=0.463517 avg=0.433167
+  Epoch 7 [190/289] loss=0.433873 avg=0.433743
+  Epoch 7 [200/289] loss=0.464672 avg=0.433635
+  Epoch 7 [210/289] loss=0.509503 avg=0.434123
+  Epoch 7 [220/289] loss=0.452332 avg=0.434540
+  Epoch 7 [230/289] loss=0.431128 avg=0.434406
+  Epoch 7 [240/289] loss=0.526866 avg=0.434780
+  Epoch 7 [250/289] loss=0.390740 avg=0.434466
+  Epoch 7 [260/289] loss=0.455426 avg=0.434843
+  Epoch 7 [270/289] loss=0.390097 avg=0.434215
+  Epoch 7 [280/289] loss=0.398602 avg=0.433226
+Epoch 7: train_loss=0.432863 val_loss=0.606177 time=727.1s
+  Saved best checkpoint (val_loss=0.606177)
+  Epoch 8 [10/289] loss=0.467482 avg=0.415385
+  Epoch 8 [20/289] loss=0.432048 avg=0.407384
+  Epoch 8 [30/289] loss=0.379652 avg=0.409738
+  Epoch 8 [40/289] loss=0.356257 avg=0.408584
+  Epoch 8 [50/289] loss=0.403598 avg=0.408168
+  Epoch 8 [60/289] loss=0.429323 avg=0.407863
+  Epoch 8 [70/289] loss=0.484816 avg=0.411475
+  Epoch 8 [80/289] loss=0.395127 avg=0.409402
+  Epoch 8 [90/289] loss=0.386902 avg=0.411635
+  Epoch 8 [100/289] loss=0.340746 avg=0.411404
+  Epoch 8 [110/289] loss=0.381552 avg=0.410401
+  Epoch 8 [120/289] loss=0.464109 avg=0.410812
+  Epoch 8 [130/289] loss=0.429199 avg=0.411001
+  Epoch 8 [140/289] loss=0.452006 avg=0.412741
+  Epoch 8 [150/289] loss=0.438015 avg=0.412399
+  Epoch 8 [160/289] loss=0.429919 avg=0.411198
+  Epoch 8 [170/289] loss=0.428588 avg=0.411408
+  Epoch 8 [180/289] loss=0.379593 avg=0.411210
+  Epoch 8 [190/289] loss=0.397801 avg=0.411356
+  Epoch 8 [200/289] loss=0.390321 avg=0.411906
+  Epoch 8 [210/289] loss=0.372043 avg=0.411199
+  Epoch 8 [220/289] loss=0.381202 avg=0.411233
+  Epoch 8 [230/289] loss=0.439183 avg=0.411477
+  Epoch 8 [240/289] loss=0.397533 avg=0.411010
+  Epoch 8 [250/289] loss=0.402102 avg=0.410250
+  Epoch 8 [260/289] loss=0.381511 avg=0.409650
+  Epoch 8 [270/289] loss=0.434573 avg=0.410384
+  Epoch 8 [280/289] loss=0.393632 avg=0.410587
+Epoch 8: train_loss=0.410328 val_loss=0.602657 time=729.2s
+  Saved best checkpoint (val_loss=0.602657)
+  Epoch 9 [10/289] loss=0.486096 avg=0.393337
+  Epoch 9 [20/289] loss=0.362318 avg=0.396590
+  Epoch 9 [30/289] loss=0.448801 avg=0.396925
+  Epoch 9 [40/289] loss=0.478760 avg=0.398088
+  Epoch 9 [50/289] loss=0.362781 avg=0.394522
+  Epoch 9 [60/289] loss=0.397595 avg=0.393870
+  Epoch 9 [70/289] loss=0.483782 avg=0.394852
+  Epoch 9 [80/289] loss=0.408295 avg=0.396458
+  Epoch 9 [90/289] loss=0.411885 avg=0.398448
+  Epoch 9 [100/289] loss=0.329982 avg=0.395893
+  Epoch 9 [110/289] loss=0.334049 avg=0.395656
+  Epoch 9 [120/289] loss=0.434902 avg=0.394455
+  Epoch 9 [130/289] loss=0.425327 avg=0.394794
+  Epoch 9 [140/289] loss=0.413108 avg=0.395300
+  Epoch 9 [150/289] loss=0.412971 avg=0.394575
+  Epoch 9 [160/289] loss=0.344740 avg=0.393970
+  Epoch 9 [170/289] loss=0.389429 avg=0.393596
+  Epoch 9 [180/289] loss=0.356718 avg=0.393447
+  Epoch 9 [190/289] loss=0.337577 avg=0.391632
+  Epoch 9 [200/289] loss=0.362205 avg=0.391125
+  Epoch 9 [210/289] loss=0.368592 avg=0.390937
+  Epoch 9 [220/289] loss=0.369619 avg=0.391460
+  Epoch 9 [230/289] loss=0.339587 avg=0.390908
+  Epoch 9 [240/289] loss=0.359637 avg=0.390781
+  Epoch 9 [250/289] loss=0.401110 avg=0.391080
+  Epoch 9 [260/289] loss=0.390278 avg=0.391434
+  Epoch 9 [270/289] loss=0.395785 avg=0.390903
+  Epoch 9 [280/289] loss=0.405934 avg=0.391556
+Epoch 9: train_loss=0.391332 val_loss=0.630560 time=726.8s
+  Epoch 10 [10/289] loss=0.412225 avg=0.366645
+  Epoch 10 [20/289] loss=0.368090 avg=0.364253
+  Epoch 10 [30/289] loss=0.355000 avg=0.365710
+  Epoch 10 [40/289] loss=0.303849 avg=0.366000
+  Epoch 10 [50/289] loss=0.371951 avg=0.368963
+  Epoch 10 [60/289] loss=0.378607 avg=0.368754
+  Epoch 10 [70/289] loss=0.452658 avg=0.372073
+  Epoch 10 [80/289] loss=0.337275 avg=0.371620
+  Epoch 10 [90/289] loss=0.364208 avg=0.372024
+  Epoch 10 [100/289] loss=0.330811 avg=0.370799
+  Epoch 10 [110/289] loss=0.328756 avg=0.371979
+  Epoch 10 [120/289] loss=0.378947 avg=0.371268
+  Epoch 10 [130/289] loss=0.407433 avg=0.371079
+  Epoch 10 [140/289] loss=0.311307 avg=0.371860
+  Epoch 10 [150/289] loss=0.334747 avg=0.370755
+  Epoch 10 [160/289] loss=0.388573 avg=0.372295
+  Epoch 10 [170/289] loss=0.345669 avg=0.373242
+  Epoch 10 [180/289] loss=0.337133 avg=0.373787
+  Epoch 10 [190/289] loss=0.422505 avg=0.373605
+  Epoch 10 [200/289] loss=0.393513 avg=0.373253
+  Epoch 10 [210/289] loss=0.371839 avg=0.372951
+  Epoch 10 [220/289] loss=0.351259 avg=0.373259
+  Epoch 10 [230/289] loss=0.310572 avg=0.372926
+  Epoch 10 [240/289] loss=0.328071 avg=0.372573
+  Epoch 10 [250/289] loss=0.437815 avg=0.372474
+  Epoch 10 [260/289] loss=0.357500 avg=0.372084
+  Epoch 10 [270/289] loss=0.399449 avg=0.372246
+  Epoch 10 [280/289] loss=0.333108 avg=0.371860
+Epoch 10: train_loss=0.372353 val_loss=0.625534 time=728.4s
+  Epoch 11 [10/289] loss=0.322373 avg=0.340446
+  Epoch 11 [20/289] loss=0.360154 avg=0.341209
+  Epoch 11 [30/289] loss=0.379954 avg=0.347610
+  Epoch 11 [40/289] loss=0.347563 avg=0.352583
+  Epoch 11 [50/289] loss=0.338653 avg=0.351359
+  Epoch 11 [60/289] loss=0.369818 avg=0.353252
+  Epoch 11 [70/289] loss=0.412465 avg=0.355257
+  Epoch 11 [80/289] loss=0.288077 avg=0.356101
+  Epoch 11 [90/289] loss=0.391466 avg=0.355701
+  Epoch 11 [100/289] loss=0.325742 avg=0.356436
+  Epoch 11 [110/289] loss=0.363654 avg=0.357317
+  Epoch 11 [120/289] loss=0.344160 avg=0.357599
+  Epoch 11 [130/289] loss=0.370761 avg=0.357192
+  Epoch 11 [140/289] loss=0.440662 avg=0.357883
+  Epoch 11 [150/289] loss=0.347095 avg=0.357857
+  Epoch 11 [160/289] loss=0.322844 avg=0.357004
+  Epoch 11 [170/289] loss=0.415790 avg=0.356843
+  Epoch 11 [180/289] loss=0.307203 avg=0.356156
+  Epoch 11 [190/289] loss=0.359990 avg=0.355564
+  Epoch 11 [200/289] loss=0.326059 avg=0.355213
+  Epoch 11 [210/289] loss=0.371759 avg=0.356073
+  Epoch 11 [220/289] loss=0.332440 avg=0.356577
+  Epoch 11 [230/289] loss=0.337384 avg=0.356280
+  Epoch 11 [240/289] loss=0.322310 avg=0.356673
+  Epoch 11 [250/289] loss=0.404963 avg=0.357065
+  Epoch 11 [260/289] loss=0.340912 avg=0.356142
+  Epoch 11 [270/289] loss=0.406827 avg=0.356376
+  Epoch 11 [280/289] loss=0.374821 avg=0.356187
+Epoch 11: train_loss=0.355615 val_loss=0.613510 time=729.4s
+  Epoch 12 [10/289] loss=0.316080 avg=0.324502
+  Epoch 12 [20/289] loss=0.335996 avg=0.334628
+  Epoch 12 [30/289] loss=0.323702 avg=0.331590
+  Epoch 12 [40/289] loss=0.314498 avg=0.332820
+  Epoch 12 [50/289] loss=0.383342 avg=0.335290
+  Epoch 12 [60/289] loss=0.330273 avg=0.335193
+  Epoch 12 [70/289] loss=0.386677 avg=0.334849
+  Epoch 12 [80/289] loss=0.352932 avg=0.334815
+  Epoch 12 [90/289] loss=0.276301 avg=0.334084
+  Epoch 12 [100/289] loss=0.296327 avg=0.334363
+  Epoch 12 [110/289] loss=0.313062 avg=0.333439
+  Epoch 12 [120/289] loss=0.321649 avg=0.333303
+  Epoch 12 [130/289] loss=0.433954 avg=0.334555
+  Epoch 12 [140/289] loss=0.318995 avg=0.334810
+  Epoch 12 [150/289] loss=0.333829 avg=0.335324
+  Epoch 12 [160/289] loss=0.287963 avg=0.334041
+  Epoch 12 [170/289] loss=0.374499 avg=0.335635
+  Epoch 12 [180/289] loss=0.353583 avg=0.336429
+  Epoch 12 [190/289] loss=0.355733 avg=0.336642
+  Epoch 12 [200/289] loss=0.286592 avg=0.337370
+  Epoch 12 [210/289] loss=0.346373 avg=0.337828
+  Epoch 12 [220/289] loss=0.289896 avg=0.337480
+  Epoch 12 [230/289] loss=0.311268 avg=0.337207
+  Epoch 12 [240/289] loss=0.338274 avg=0.337797
+  Epoch 12 [250/289] loss=0.340179 avg=0.338003
+  Epoch 12 [260/289] loss=0.408522 avg=0.338538
+  Epoch 12 [270/289] loss=0.346935 avg=0.338792
+  Epoch 12 [280/289] loss=0.279876 avg=0.338966
+Epoch 12: train_loss=0.339330 val_loss=0.612721 time=726.2s
+  Epoch 13 [10/289] loss=0.302563 avg=0.329846
+  Epoch 13 [20/289] loss=0.240985 avg=0.327949
+  Epoch 13 [30/289] loss=0.297685 avg=0.324611
+  Epoch 13 [40/289] loss=0.356021 avg=0.323986
+  Epoch 13 [50/289] loss=0.342002 avg=0.324253
+  Epoch 13 [60/289] loss=0.299523 avg=0.323704
+  Epoch 13 [70/289] loss=0.337352 avg=0.324439
+  Epoch 13 [80/289] loss=0.326291 avg=0.323458
+  Epoch 13 [90/289] loss=0.339210 avg=0.322819
+  Epoch 13 [100/289] loss=0.347973 avg=0.322283
+  Epoch 13 [110/289] loss=0.278902 avg=0.322716
+  Epoch 13 [120/289] loss=0.326770 avg=0.323778
+  Epoch 13 [130/289] loss=0.339154 avg=0.323920
+  Epoch 13 [140/289] loss=0.269079 avg=0.323627
+  Epoch 13 [150/289] loss=0.316100 avg=0.325071
+  Epoch 13 [160/289] loss=0.296929 avg=0.325183
+  Epoch 13 [170/289] loss=0.352781 avg=0.325027
+  Epoch 13 [180/289] loss=0.333455 avg=0.324239
+  Epoch 13 [190/289] loss=0.355486 avg=0.324810
+  Epoch 13 [200/289] loss=0.390809 avg=0.325877
+  Epoch 13 [210/289] loss=0.316067 avg=0.325651
+  Epoch 13 [220/289] loss=0.275069 avg=0.325524
+  Epoch 13 [230/289] loss=0.341102 avg=0.325166
+  Epoch 13 [240/289] loss=0.251926 avg=0.324532
+  Epoch 13 [250/289] loss=0.379582 avg=0.324704
+  Epoch 13 [260/289] loss=0.311531 avg=0.324950
+  Epoch 13 [270/289] loss=0.346289 avg=0.324724
+  Epoch 13 [280/289] loss=0.343747 avg=0.324954
+Epoch 13: train_loss=0.325358 val_loss=0.628372 time=726.8s
+  Early stopping at epoch 13 (patience=5)
+Saved final checkpoint to checkpoints/jitter_01/final_hypernet.pt
+Best checkpoint at checkpoints/jitter_01/best_hypernet.pt (val_loss=0.602657)
+
+Training complete. Best checkpoint: checkpoints/jitter_01/best_hypernet.pt
+Training jitter job finished successfully.
