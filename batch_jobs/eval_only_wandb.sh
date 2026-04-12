@@ -52,6 +52,7 @@ fi
 
 # Checkpoint path
 CHECKPOINT_PATH="checkpoints/training_02/best_hypernet.pt"
+CONTEXT_ENCODER_MODEL="${CONTEXT_ENCODER_MODEL:-amazon/chronos-bolt-mini}"
 
 if [ ! -f "$CHECKPOINT_PATH" ]; then
   echo "Checkpoint not found at ${CHECKPOINT_PATH}"
@@ -65,6 +66,7 @@ echo "Starting standalone orchestration + evaluation run: ${ORCH_RUN_NAME}"
 uv run python -m src.orchestration.main \
   "orchestration.checkpoint_path=${CHECKPOINT_PATH}" \
   "orchestration.run_id=${RUN_ID}" \
+  "context_encoder_model=${CONTEXT_ENCODER_MODEL}" \
   orchestration.long_history_length_steps=4032 \
   orchestration.short_context_length_steps=256 \
   stride_steps=1 \

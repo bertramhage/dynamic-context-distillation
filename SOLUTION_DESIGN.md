@@ -201,7 +201,7 @@ uv run python -m src.training.main training.train_batch_size=8 training_loop.max
 ### Files
 - `src/orchestration/main.py` — Hydra CLI entrypoint
 - `src/orchestration/run.py` — core orchestration logic (`run_orchestration`)
-- `src/orchestration/context_encoder.py` — frozen Chronos-2 encoder wrapper
+- `src/orchestration/context_encoder.py` — frozen Chronos encoder wrapper (Chronos-2 or Chronos-Bolt)
 - `src/orchestration/lora_saver.py` — hypernetwork output → PEFT adapter on disk
 - `conf/experiment_orchestration.yaml` — default orchestration config
 
@@ -209,10 +209,12 @@ uv run python -m src.training.main training.train_batch_size=8 training_loop.max
 
 The orchestration layer is a middleman between a trained hypernetwork (Layer 1 output) and the evaluation layer (Layer 3). Its job:
 
-1. **Load** dataset (`shared_utils.load_dataset`), Chronos-2 pipeline, and hypernetwork checkpoint.
-2. **Generate LoRA adapters**: for each sensor, extract the long-history window from the dataset, encode it through the frozen Chronos-2 encoder to get hidden states `[num_patches, 768]`, run the hypernetwork to produce LoRA weight dicts, and save each adapter to disk as a PEFT-compatible directory.
+1. **Load** dataset (`shared_utils.load_dataset`), Chronos-2 pipeline, hypernetwork checkpoint, and a configurable context-encoder model (`context_encoder_model`, default `amazon/chronos-bolt-mini`).
+2. **Generate LoRA adapters**: for each sensor, extract the long-history window from the dataset, encode it through the frozen context encoder to get last hidden states `[num_patches, d_model]`, run the hypernetwork to produce LoRA weight dicts, and save each adapter to disk as a PEFT-compatible directory.
 3. **Build assignment_df**: a DataFrame mapping `(item_id, prediction_time) → adapter_id` for every evaluation step.
 4. **Call `run_evaluation`** with the short-context config, the generated assignment_df, and the pipeline.
+
+At runtime, orchestration validates context-encoder compatibility by checking that `context_pipeline.model.config.d_model` matches the hypernetwork's expected input width (`hypernetwork.perceiver.d_input`).
 
 ### Time-window layout
 ```
@@ -232,13 +234,13 @@ The orchestration layer is a middleman between a trained hypernetwork (Layer 1 o
 ### Context encoder
 `ChronosContextEncoder` wraps a frozen Chronos model (Chronos-2 or Chronos-Bolt). It provides two methods:
 - `encode_last_hidden(context)`: returns only the last hidden state `[batch, num_patches, d_model]`. Used by the training loop. Supports both Chronos-Bolt (uses built-in `encode()`) and Chronos-2 (manual block loop).
-- `encode_intermediates(context)`: returns per-layer hidden states `[batch, num_layers, num_patches, d_model]`. Retained for backward compatibility (orchestration layer). Only works with Chronos-2.
+- `encode_intermediates(context)`: returns per-layer hidden states `[batch, num_layers, num_patches, d_model]`. Retained for backward compatibility. Only works with Chronos-2.
 
 Supports batched encoding to control GPU memory.
 
 ### Hypernetwork interface (expected)
 ```python
-# Input:  context_hidden_states [batch, num_patches, 768]
+# Input:  context_hidden_states [batch, num_patches, d_input]
 # Output: dict[module_short_name, {"A": [batch, 12, r, d_in], "B": [batch, 12, d_out, r]}]
 lora_dict = hypernetwork(hidden_states)
 ```

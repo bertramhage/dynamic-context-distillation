@@ -180,13 +180,10 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
     # ---- load dataset ----
     df_long = shared_utils.load_dataset(cfg)
 
-    # ---- load Chronos-2 pipeline ----
+    # ---- load Chronos-2 pipeline (student/eval model) ----
     pipeline: Chronos2Pipeline = BaseChronosPipeline.from_pretrained(
         "amazon/chronos-2", device_map=device,
     )
-
-    # ---- context encoder (frozen Chronos-2) ----
-    context_encoder = ChronosContextEncoder(pipeline)
 
     # ---- load hypernetwork checkpoint ----
     checkpoint_path = str(orch.checkpoint_path)
@@ -195,6 +192,27 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
     hypernetwork.eval()
     for p in hypernetwork.parameters():
         p.requires_grad = False
+
+    expected_context_d = None
+    if hasattr(hypernetwork, "perceiver") and hasattr(hypernetwork.perceiver, "d_input"):
+        expected_context_d = int(hypernetwork.perceiver.d_input)
+
+    # ---- context encoder (must match training setup) ----
+    context_model_name = str(cfg.get("context_encoder_model", "amazon/chronos-bolt-mini"))
+    context_pipeline = BaseChronosPipeline.from_pretrained(
+        context_model_name, device_map=device,
+    )
+    context_encoder = ChronosContextEncoder(context_pipeline)
+    context_d_model = int(context_pipeline.model.config.d_model)
+    print(f"Context encoder loaded: {context_model_name} (d_model={context_d_model})")
+
+    if expected_context_d is not None and context_d_model != expected_context_d:
+        raise ValueError(
+            "Context encoder dimension mismatch with checkpoint: "
+            f"hypernetwork expects d_input={expected_context_d}, "
+            f"but {context_model_name} provides d_model={context_d_model}. "
+            "Set context_encoder_model to the model used during training."
+        )
 
     # ---- adapter output directory ----
     run_id = getattr(orch, "run_id", None) or str(uuid.uuid4())[:8]
@@ -240,14 +258,13 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
         )
         print(f"Context tensor shape: {context_tensor.shape}")
 
-        # Encode through frozen Chronos-2, collecting per-layer intermediates.
-        all_z = context_encoder.encode_intermediates_batched(
+        # Encode long contexts exactly like training (last hidden states).
+        all_z = context_encoder.encode_last_hidden_batched(
             context_tensor, batch_size=encode_batch_size,
         )
-        # all_z: [n_sensors, num_layers=12, num_context_patches, d_model=768]
-        # all_z[:, l, :, :] = Z_l = input to block l, used to generate LoRA for block l.
+        # all_z: [n_sensors, num_context_patches, d_model]
 
-        # Run hypernetwork: shared Perceiver applied per-layer internally.
+        # Run hypernetwork: outputs per-layer LoRA weights for Chronos-2.
         lora_dict = hypernetwork(all_z)
         # Expected: {"q": {"A": [n_sensors, 12, r, d_in], "B": [n_sensors, 12, d_out, r]}, ...}
 
@@ -289,10 +306,10 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
                 df_long, sensor_ids, long_start, long_end, id_col, ts_col, target_col,
             )
 
-            all_z = context_encoder.encode_intermediates_batched(
+            all_z = context_encoder.encode_last_hidden_batched(
                 context_tensor, batch_size=encode_batch_size,
             )
-            # all_z: [n_sensors, num_layers=12, num_context_patches, d_model=768]
+            # all_z: [n_sensors, num_context_patches, d_model]
 
             lora_dict = hypernetwork(all_z)
 

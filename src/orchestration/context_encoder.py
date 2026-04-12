@@ -96,6 +96,28 @@ class ChronosContextEncoder:
         return hidden_states[:, :num_context_patches, :]
 
     @torch.no_grad()
+    def encode_last_hidden_batched(
+        self, context_tensor: torch.Tensor, batch_size: int = 32
+    ) -> torch.Tensor:
+        """Encode in sensor-batches and return last hidden states.
+
+        Args:
+            context_tensor: [n_sensors, seq_len] full sensor batch.
+            batch_size: max sensors per forward pass.
+
+        Returns:
+            [n_sensors, num_context_patches, d_model]
+        """
+        n_sensors = context_tensor.shape[0]
+        chunks: list[torch.Tensor] = []
+
+        for start in range(0, n_sensors, batch_size):
+            end = min(start + batch_size, n_sensors)
+            chunks.append(self.encode_last_hidden(context_tensor[start:end]))
+
+        return torch.cat(chunks, dim=0)
+
+    @torch.no_grad()
     def encode_intermediates(self, context_tensor: torch.Tensor) -> torch.Tensor:
         """Collect intermediate hidden states for a batch of time series.
 
