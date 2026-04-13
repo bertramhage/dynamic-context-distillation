@@ -1,10 +1,10 @@
 #!/bin/sh
 
 ### Job Name:
-#BSUB -J eval_only_01
+#BSUB -J eval_only_jitter_01
 
 ### Queue Name:
-#BSUB -q "gpua10 gpua40 gpul40s gpuh100 gpua100"
+#BSUB -q "gpua40 gpul40s gpuh100 gpua100"
 
 ### Requesting one host
 #BSUB -R "span[hosts=1]"
@@ -51,8 +51,7 @@ if [ "${RUN_UV_SYNC:-1}" = "1" ]; then
 fi
 
 # Checkpoint path
-CHECKPOINT_PATH="checkpoints/training_02/best_hypernet.pt"
-CONTEXT_ENCODER_MODEL="${CONTEXT_ENCODER_MODEL:-amazon/chronos-bolt-mini}"
+CHECKPOINT_PATH="checkpoints/jitter_01/best_hypernet.pt"
 DYNAMIC_BATCH_SIZE="${DYNAMIC_BATCH_SIZE:-null}"
 
 if [ ! -f "$CHECKPOINT_PATH" ]; then
@@ -67,9 +66,8 @@ echo "Starting standalone orchestration + evaluation run: ${ORCH_RUN_NAME}"
 uv run python -m src.orchestration.main \
   "orchestration.checkpoint_path=${CHECKPOINT_PATH}" \
   "orchestration.run_id=${RUN_ID}" \
-  "context_encoder_model=${CONTEXT_ENCODER_MODEL}" \
   orchestration.long_history_length_steps=4032 \
-  orchestration.short_context_length_steps=256 \
+  orchestration.short_context_length_steps=288 \
   stride_steps=1 \
   start_test_day=null \
   n_test_days=null \
