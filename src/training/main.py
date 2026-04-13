@@ -135,6 +135,14 @@ def main(cfg: DictConfig) -> None:
 
     shared_utils.set_seed(cfg.seed)
 
+    target_mode = str(cfg.training_loop.get("target_mode", "teacher")).lower()
+    if target_mode not in {"teacher", "ground_truth"}:
+        raise ValueError(
+            f"Unsupported training_loop.target_mode={target_mode!r}. "
+            "Expected 'teacher' or 'ground_truth'."
+        )
+    print(f"Target supervision mode: {target_mode}")
+
     # --- WandB ---
     init_wandb(cfg, group="training")
 
@@ -213,25 +221,39 @@ def main(cfg: DictConfig) -> None:
         else None
     )
 
-    train_teacher_cache = load_or_build_teacher_cache(
-        split_name="train",
-        cfg=cfg,
-        dataset=train_dataset,
-        teacher_model=pipeline.model,
-        teacher_model_name=teacher_model_name,
-        device=device,
-        jitter_enabled=jitter_enabled,
-        jitter_cfg=train_jitter_cfg,
+    if target_mode == "teacher":
+        train_teacher_cache = load_or_build_teacher_cache(
+            split_name="train",
+            cfg=cfg,
+            dataset=train_dataset,
+            teacher_model=pipeline.model,
+            teacher_model_name=teacher_model_name,
+            device=device,
+            jitter_enabled=jitter_enabled,
+            jitter_cfg=train_jitter_cfg,
+        )
+        val_teacher_cache = load_or_build_teacher_cache(
+            split_name="val",
+            cfg=cfg,
+            dataset=val_dataset,
+            teacher_model=pipeline.model,
+            teacher_model_name=teacher_model_name,
+            device=device,
+            jitter_enabled=(jitter_enabled and jitter_apply_in_val),
+            jitter_cfg=val_jitter_cfg,
+        )
+    else:
+        train_teacher_cache = None
+        val_teacher_cache = None
+        print("Teacher cache skipped (ground_truth supervision mode)")
+
+    train_build_teacher_contexts = (target_mode == "teacher") and (train_teacher_cache is None)
+    val_build_teacher_contexts = (target_mode == "teacher") and (val_teacher_cache is None)
+    train_collate_jitter = (
+        train_jitter_cfg if (target_mode == "ground_truth" or train_teacher_cache is None) else None
     )
-    val_teacher_cache = load_or_build_teacher_cache(
-        split_name="val",
-        cfg=cfg,
-        dataset=val_dataset,
-        teacher_model=pipeline.model,
-        teacher_model_name=teacher_model_name,
-        device=device,
-        jitter_enabled=(jitter_enabled and jitter_apply_in_val),
-        jitter_cfg=val_jitter_cfg,
+    val_collate_jitter = (
+        val_jitter_cfg if (target_mode == "ground_truth" or val_teacher_cache is None) else None
     )
 
     train_collate_fn = make_training_collate_fn(
@@ -240,14 +262,14 @@ def main(cfg: DictConfig) -> None:
         prediction_length=t.prediction_length,
         n_queries_per_context=t.n_queries_per_context,
         query_stride_steps=t.query_stride_steps,
-        length_jitter=(train_jitter_cfg if train_teacher_cache is None else None),
+        length_jitter=train_collate_jitter,
         fixed_long_steps=(
             train_teacher_cache.sampled_long_steps if train_teacher_cache is not None else None
         ),
         fixed_short_steps=(
             train_teacher_cache.sampled_short_steps if train_teacher_cache is not None else None
         ),
-        build_teacher_contexts=(train_teacher_cache is None),
+        build_teacher_contexts=train_build_teacher_contexts,
     )
     val_collate_fn = make_training_collate_fn(
         long_context_steps=t.long_context_steps,
@@ -255,14 +277,14 @@ def main(cfg: DictConfig) -> None:
         prediction_length=t.prediction_length,
         n_queries_per_context=t.n_queries_per_context,
         query_stride_steps=t.query_stride_steps,
-        length_jitter=(val_jitter_cfg if val_teacher_cache is None else None),
+        length_jitter=val_collate_jitter,
         fixed_long_steps=(
             val_teacher_cache.sampled_long_steps if val_teacher_cache is not None else None
         ),
         fixed_short_steps=(
             val_teacher_cache.sampled_short_steps if val_teacher_cache is not None else None
         ),
-        build_teacher_contexts=(val_teacher_cache is None),
+        build_teacher_contexts=val_build_teacher_contexts,
     )
 
     if jitter_enabled:
@@ -356,6 +378,8 @@ def main(cfg: DictConfig) -> None:
         warmup_steps=loop_cfg.warmup_steps,
         train_teacher_cache=(train_teacher_cache.teacher_preds if train_teacher_cache else None),
         val_teacher_cache=(val_teacher_cache.teacher_preds if val_teacher_cache else None),
+        target_mode=target_mode,
+        quantile_levels=cfg.get("quantile_levels", None),
     )
 
     # --- Train ---

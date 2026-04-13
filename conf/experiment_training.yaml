@@ -65,6 +65,7 @@ optimizer:
   weight_decay: 0.01
 
 training_loop:
+  target_mode: teacher           # teacher | ground_truth
   max_epochs: 50
   patience: 10
   lora_scaling: 2.0               # alpha / rank = 16 / 8

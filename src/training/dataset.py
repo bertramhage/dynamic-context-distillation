@@ -1,4 +1,4 @@
-"""Training dataset for the hypernetwork distillation loop.
+"""Training dataset for hypernetwork supervision loops.
 
 Constructs rolling-window samples from the PEMS-BAY (or similar) long-format
 DataFrame. Each sample consists of:
@@ -30,7 +30,7 @@ class TrainingSample:
     sensor_id: str
     long_context: torch.Tensor       # [long_ctx_len]
     short_contexts: torch.Tensor     # [n_queries, short_ctx_len]
-    teacher_contexts: torch.Tensor   # [n_queries, teacher_ctx_len]  (full context for teacher)
+    teacher_contexts: torch.Tensor | None  # [n_queries, teacher_ctx_len] when teacher mode is used
     targets: torch.Tensor            # [n_queries, prediction_length]
 
 

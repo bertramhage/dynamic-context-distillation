@@ -61,11 +61,14 @@ The implementation is intentionally minimal and strict:
 - `adapter.*`: LoRA application settings (`adapter_root`, rank/alpha/targets, etc.).
 
 ### Key training cache config conventions
+- `training_loop.target_mode`: supervision objective (`teacher` or `ground_truth`).
 - `teacher_cache.enabled`: enables disk-backed teacher prediction caching.
 - `teacher_cache.cache_dir`: root folder for cache files keyed by a hash of dataset/jitter/model parameters.
 - `teacher_cache.dtype`: persisted prediction dtype (`float16`, `float32`, `bfloat16`).
 - `teacher_cache.jitter_seed`: deterministic seed for per-sample jitter outcomes in cache builds (defaults to global `seed`).
 - `teacher_cache.rebuild`: force rebuild even if a matching cache file already exists.
+
+When `training_loop.target_mode=ground_truth`, teacher cache loading/building is skipped entirely.
 
 ### Environment and run command
 This project uses **uv** for environment management.
@@ -125,16 +128,16 @@ src/
 - `src/training/lora_injection.py` — Runtime LoRA monkey-patching for training forward passes
 - `src/training/dataset.py` — Rolling-window dataset with multi-query support
 - `src/training/teacher_cache.py` — deterministic teacher input-output cache builder/loader
-- `src/training/trainer.py` — Teacher-student distillation training loop
+- `src/training/trainer.py` — Trainer with teacher-distillation and ground-truth supervision modes
 - `conf/experiment_training.yaml` — Default training config
 
 ### How it works
 
-The training layer implements teacher-student distillation to train a hypernetwork that produces LoRA adapters for Chronos-2.
+The training layer supports two supervision objectives to train a hypernetwork that produces LoRA adapters for Chronos-2.
 
 1. **Dataset** (`HypernetTrainingDataset`): constructs rolling-window samples from the long-format DataFrame. Each sample contains a long context window and multiple (short_context, forecast_target) query pairs. The long context is what the hypernetwork sees; the short contexts are what the LoRA-adapted student model sees during inference. The collate path supports optional hierarchical length jitter for both long and short contexts, and also supports fixed per-sample lengths from teacher-cache metadata to keep teacher/student supervision aligned across shuffled batches.
 
-2. **Teacher cache** (`teacher_cache.py`): before epoch training begins, the pipeline resolves a deterministic per-sample context-length realization (seeded jitter), computes frozen Chronos-2 teacher quantile outputs once, and saves them to disk. Cache file names are keyed by a hash that includes dataset windowing, explicit split date window (train/val start-end), jitter config + seed, and teacher-model identity metadata (name + optional revision). Matching caches are loaded instead of rebuilt.
+2. **Teacher cache** (`teacher_cache.py`): in `target_mode=teacher`, before epoch training begins, the pipeline resolves a deterministic per-sample context-length realization (seeded jitter), computes frozen Chronos-2 teacher quantile outputs once, and saves them to disk. Cache file names are keyed by a hash that includes dataset windowing, explicit split date window (train/val start-end), jitter config + seed, and teacher-model identity metadata (name + optional revision). Matching caches are loaded instead of rebuilt. In `target_mode=ground_truth`, this cache path is not used.
 
 3. **Context encoding**: a separate frozen context encoder model (default: Chronos-Bolt-Mini, configurable via `context_encoder_model`) encodes the long context and returns its last hidden state `[batch, num_patches, d_model]`. If the context length exceeds the encoder's single-pass limit (for Bolt, 2048 timesteps), `encode_last_hidden` splits the series into non-overlapping chunks, encodes each chunk independently, and concatenates patch embeddings along the sequence axis before passing them to the hypernetwork. This is cheaper than the original approach of capturing per-layer intermediates from Chronos-2, and avoids tying the context encoder to the student/teacher model. `ChronosContextEncoder` supports both Chronos-Bolt (T5-based `encode()`) and Chronos-2 (manual block loop) backends.
 
@@ -143,9 +146,9 @@ The training layer implements teacher-student distillation to train a hypernetwo
 5. **LoRA injection** (`apply_lora_to_model`): monkey-patches `nn.Linear.forward` on Chronos-2's TimeSelfAttention modules (q, k, v, o) to add the LoRA delta. Gradients flow through the LoRA weights back to the hypernetwork. Patches are cleaned up after each forward pass.
 
 6. **Training loop** (`HypernetTrainer`):
-  - Teacher: quantile predictions are read from the cached teacher dataset (disk-backed, loaded in-memory), with on-the-fly teacher forward only used when cache is disabled.
-   - Student: short-context Chronos-2 + LoRA from hypernetwork.
-   - Loss: smooth L1 on quantile predictions (teacher vs student).
+  - Student: short-context Chronos-2 + LoRA from hypernetwork.
+  - `target_mode=teacher`: teacher quantile predictions are read from cache (or computed on-the-fly when cache is disabled), and loss is smooth L1 on teacher vs student quantiles.
+  - `target_mode=ground_truth`: teacher forward is skipped, teacher contexts are not constructed in collation, and loss is CRPS approximated from quantile pinball loss against `batch.targets`.
    - **Gradient accumulation**: loss is scaled by `1/grad_accum_steps`, optimizer steps every N batches (default 8), giving an effective batch size of `train_batch_size × grad_accum_steps`.
    - **LR schedule**: cosine annealing with linear warmup (`SequentialLR`). Linear warmup over configurable steps (default 100), then cosine decay to `eta_min=1e-7`. Current LR is logged to wandb.
    - Early stopping on validation loss with configurable patience.
@@ -153,6 +156,7 @@ The training layer implements teacher-student distillation to train a hypernetwo
 
 ### Data flow
 ```
+Teacher mode only:
 Teacher cache build (once per split/hash):
 Long history + short context realizations → Chronos-2 (frozen) → cached teacher quantile preds
 
@@ -162,8 +166,9 @@ Long history → Frozen context encoder (Chronos-Bolt-Mini) → last hidden [B, 
               → LoRA dict {q/k/v/o: {A, B}}
 
 Short history + LoRA → Chronos-2 (monkey-patched) → student quantile preds
-Cached lookup        → teacher quantile preds
-                                                   → Loss(student, teacher)
+
+Teacher mode:      Cached lookup → teacher quantile preds → Loss(student, teacher)
+Ground-truth mode: batch.targets                         → Loss(student, ground_truth) [CRPS]
 ```
 
 Note: two separate models are loaded — Chronos-Bolt-Mini for context encoding (embeddings for the hypernetwork) and Chronos-2 for teacher/student predictions. The context encoder model is configurable via `context_encoder_model` in the training config.

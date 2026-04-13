@@ -1,9 +1,14 @@
-"""Teacher-student distillation training loop for the hypernetwork.
+"""Hypernetwork training loop with teacher or ground-truth supervision.
 
-Teacher = Chronos-2 with full long+short context (frozen).
-Student = Chronos-2 with short context + LoRA from hypernetwork.
+Teacher mode:
+    Teacher = Chronos-2 with full long+short context (frozen).
+    Student = Chronos-2 with short context + LoRA from hypernetwork.
+    Loss = smooth-L1 proxy over teacher/student quantile outputs.
 
-Loss = KL divergence between teacher and student quantile predictions.
+Ground-truth mode:
+    Student = Chronos-2 with short context + LoRA from hypernetwork.
+    Loss = CRPS approximation from quantile pinball losses vs. targets.
+
 Only hypernetwork parameters are trained.
 """
 
@@ -12,6 +17,7 @@ from __future__ import annotations
 import math
 import time
 from pathlib import Path
+from typing import Sequence
 
 import torch
 import torch.nn as nn
@@ -56,6 +62,45 @@ def quantile_kl_divergence(
     return loss.mean()
 
 
+def quantile_crps_loss(
+    student_quantiles: torch.Tensor,
+    targets: torch.Tensor,
+    quantile_levels: torch.Tensor,
+) -> torch.Tensor:
+    """Approximate CRPS using quantile pinball losses.
+
+    Args:
+        student_quantiles: Predicted quantiles with shape [batch, n_queries, n_quantiles, pred_steps].
+        targets: Ground-truth targets with shape [batch, n_queries, pred_steps].
+        quantile_levels: Monotonic quantile levels with shape [n_quantiles].
+
+    Returns:
+        Scalar CRPS-style loss averaged over all dimensions.
+    """
+    if student_quantiles.ndim != 4:
+        raise ValueError("student_quantiles must have shape [B, Q, K, T]")
+    if targets.ndim != 3:
+        raise ValueError("targets must have shape [B, Q, T]")
+    if quantile_levels.ndim != 1:
+        raise ValueError("quantile_levels must be a 1D tensor")
+
+    if student_quantiles.shape[0] != targets.shape[0] or student_quantiles.shape[1] != targets.shape[1]:
+        raise ValueError("Batch/query dimensions of student_quantiles and targets must match")
+    if student_quantiles.shape[3] != targets.shape[2]:
+        raise ValueError("Prediction length of student_quantiles and targets must match")
+    if student_quantiles.shape[2] != quantile_levels.numel():
+        raise ValueError("Number of quantiles must match quantile_levels")
+
+    tau = quantile_levels.to(device=student_quantiles.device, dtype=student_quantiles.dtype)
+    tau = tau.view(1, 1, -1, 1)
+
+    errors = targets.to(student_quantiles.dtype).unsqueeze(2) - student_quantiles
+    pinball = torch.maximum(tau * errors, (tau - 1.0) * errors)
+
+    # CRPS = 2 * integral pinball(τ) dτ; use a simple discrete average over quantiles.
+    return (2.0 * pinball).mean()
+
+
 def _compute_num_output_patches(prediction_length: int, output_patch_size: int) -> int:
     """Compute number of output patches needed for a given prediction length."""
     return math.ceil(prediction_length / output_patch_size)
@@ -85,6 +130,8 @@ class HypernetTrainer:
         warmup_steps: int = 100,
         train_teacher_cache: torch.Tensor | None = None,
         val_teacher_cache: torch.Tensor | None = None,
+        target_mode: str = "teacher",
+        quantile_levels: Sequence[float] | None = None,
     ):
         self.hypernetwork = hypernetwork.to(device)
         self.pipeline = pipeline
@@ -105,6 +152,26 @@ class HypernetTrainer:
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self.train_teacher_cache = train_teacher_cache
         self.val_teacher_cache = val_teacher_cache
+        self.target_mode = str(target_mode).lower()
+        if self.target_mode not in {"teacher", "ground_truth"}:
+            raise ValueError(
+                f"Unsupported target_mode={target_mode!r}. Expected 'teacher' or 'ground_truth'."
+            )
+
+        self.quantile_levels: torch.Tensor | None = None
+        if quantile_levels is not None:
+            q = torch.as_tensor(list(quantile_levels), dtype=torch.float32)
+            if q.ndim != 1:
+                raise ValueError("quantile_levels must be a 1D sequence")
+            if q.numel() > 1 and torch.any(q[1:] < q[:-1]):
+                raise ValueError("quantile_levels must be sorted in ascending order")
+            self.quantile_levels = q
+        else:
+            model_quantiles = getattr(self.model.chronos_config, "quantiles", None)
+            if model_quantiles is not None:
+                q = torch.as_tensor(list(model_quantiles), dtype=torch.float32)
+                if q.ndim == 1 and q.numel() > 0:
+                    self.quantile_levels = q
 
         # Optimizer — only hypernetwork params
         self.optimizer = torch.optim.AdamW(
@@ -129,6 +196,17 @@ class HypernetTrainer:
         self.model.eval()
         for p in self.model.parameters():
             p.requires_grad = False
+
+    def _resolve_quantile_levels(self, n_quantiles: int, device: str | torch.device) -> torch.Tensor:
+        """Return quantile levels aligned with the model output width."""
+        if self.quantile_levels is not None and self.quantile_levels.numel() == n_quantiles:
+            return self.quantile_levels.to(device=device, dtype=torch.float32)
+
+        # Fallback to evenly spaced midpoints if explicit levels are unavailable/mismatched.
+        return (
+            (torch.arange(n_quantiles, device=device, dtype=torch.float32) + 0.5)
+            / float(n_quantiles)
+        )
 
     def _lookup_cached_teacher_preds(
         self,
@@ -228,7 +306,8 @@ class HypernetTrainer:
             long_ctx = batch["long_context"].to(self.device)       # [B, long_len]
             short_ctx = batch["short_contexts"]                     # [B, Q, short_len]
             sample_indices = batch["sample_indices"]
-            prediction_length = batch["targets"].shape[-1]
+            targets = batch["targets"].to(self.device)
+            prediction_length = targets.shape[-1]
 
             # 1. Encode long context through frozen context encoder
             with torch.no_grad():
@@ -237,20 +316,34 @@ class HypernetTrainer:
             # 2. Generate LoRA weights via hypernetwork
             lora_dict = self.hypernetwork(ctx_features)
 
-            # 3. Teacher predictions (cached, no grad)
-            if self.train_teacher_cache is not None:
-                teacher_preds = self._lookup_cached_teacher_preds(
-                    self.train_teacher_cache, sample_indices,
-                )
-            else:
-                teacher_ctx = batch["teacher_contexts"]
-                teacher_preds = self._teacher_forward(teacher_ctx, prediction_length)
-
-            # 4. Student predictions (grad flows through LoRA -> hypernetwork)
+            # 3. Student predictions (grad flows through LoRA -> hypernetwork)
             student_preds = self._student_forward(short_ctx, lora_dict, prediction_length)
 
-            # 5. Loss (scaled for gradient accumulation)
-            loss = quantile_kl_divergence(teacher_preds.detach(), student_preds)
+            # 4. Loss (scaled for gradient accumulation)
+            if self.target_mode == "teacher":
+                if self.train_teacher_cache is not None:
+                    teacher_preds = self._lookup_cached_teacher_preds(
+                        self.train_teacher_cache, sample_indices,
+                    )
+                elif "teacher_contexts" in batch:
+                    teacher_ctx = batch["teacher_contexts"]
+                    teacher_preds = self._teacher_forward(teacher_ctx, prediction_length)
+                else:
+                    raise ValueError(
+                        "Teacher supervision requires teacher_contexts when teacher cache is disabled"
+                    )
+
+                loss = quantile_kl_divergence(teacher_preds.detach(), student_preds)
+            else:
+                quantile_levels = self._resolve_quantile_levels(
+                    n_quantiles=student_preds.shape[2],
+                    device=student_preds.device,
+                )
+                loss = quantile_crps_loss(
+                    student_quantiles=student_preds,
+                    targets=targets,
+                    quantile_levels=quantile_levels,
+                )
 
             if self.l1_reg_coef > 0:
                 l1_reg = self._compute_l1_reg(lora_dict)
@@ -302,22 +395,39 @@ class HypernetTrainer:
             long_ctx = batch["long_context"].to(self.device)
             short_ctx = batch["short_contexts"]
             sample_indices = batch["sample_indices"]
-            prediction_length = batch["targets"].shape[-1]
+            targets = batch["targets"].to(self.device)
+            prediction_length = targets.shape[-1]
 
             ctx_features = self.context_encoder.encode_last_hidden(long_ctx)
 
             lora_dict = self.hypernetwork(ctx_features)
 
-            if self.val_teacher_cache is not None:
-                teacher_preds = self._lookup_cached_teacher_preds(
-                    self.val_teacher_cache, sample_indices,
-                )
-            else:
-                teacher_ctx = batch["teacher_contexts"]
-                teacher_preds = self._teacher_forward(teacher_ctx, prediction_length)
             student_preds = self._student_forward(short_ctx, lora_dict, prediction_length)
 
-            loss = quantile_kl_divergence(teacher_preds, student_preds)
+            if self.target_mode == "teacher":
+                if self.val_teacher_cache is not None:
+                    teacher_preds = self._lookup_cached_teacher_preds(
+                        self.val_teacher_cache, sample_indices,
+                    )
+                elif "teacher_contexts" in batch:
+                    teacher_ctx = batch["teacher_contexts"]
+                    teacher_preds = self._teacher_forward(teacher_ctx, prediction_length)
+                else:
+                    raise ValueError(
+                        "Teacher supervision requires teacher_contexts when teacher cache is disabled"
+                    )
+
+                loss = quantile_kl_divergence(teacher_preds, student_preds)
+            else:
+                quantile_levels = self._resolve_quantile_levels(
+                    n_quantiles=student_preds.shape[2],
+                    device=student_preds.device,
+                )
+                loss = quantile_crps_loss(
+                    student_quantiles=student_preds,
+                    targets=targets,
+                    quantile_levels=quantile_levels,
+                )
             total_loss += loss.item()
             n_batches += 1
 
@@ -341,6 +451,7 @@ class HypernetTrainer:
         print(f"  Train teacher cache: {self.train_teacher_cache is not None}")
         if self.val_loader is not None:
             print(f"  Val teacher cache: {self.val_teacher_cache is not None}")
+        print(f"  Target mode: {self.target_mode}")
         print(f"  Hypernetwork params: {sum(p.numel() for p in self.hypernetwork.parameters()):,}")
 
         for epoch in range(self.max_epochs):
