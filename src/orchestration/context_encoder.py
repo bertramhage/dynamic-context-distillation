@@ -17,13 +17,42 @@ class ChronosContextEncoder:
         self.device = next(self.model.parameters()).device
         self._is_bolt = isinstance(self.model, ChronosBoltModelForForecasting)
 
+    @property
+    def max_context_steps(self) -> int:
+        """Maximum timesteps the underlying model handles in one pass."""
+        if self._is_bolt:
+            return self.model.chronos_config.context_length
+        return getattr(self.model.chronos_config, "context_length", 4096)
+
     @torch.no_grad()
     def encode_last_hidden(self, context_tensor: torch.Tensor) -> torch.Tensor:
-        """Get last-layer hidden states. Returns [B, num_patches, d_model].
+        """Get last-layer hidden states with automatic chunking.
 
-        For Chronos-Bolt models, uses the built-in encode() method.
-        For Chronos-2 models, runs the full encoder and returns the final output.
+        If context length exceeds the model's single-pass context limit,
+        splits into non-overlapping chunks, encodes each chunk independently,
+        and concatenates patch embeddings along the sequence dimension.
+
+        Returns:
+            [B, total_num_patches, d_model]
         """
+        context_tensor = context_tensor.to(self.device)
+        seq_len = context_tensor.shape[-1]
+        max_steps = self.max_context_steps
+
+        if seq_len <= max_steps:
+            return self._encode_single(context_tensor)
+
+        chunk_embeddings: list[torch.Tensor] = []
+        for start in range(0, seq_len, max_steps):
+            end = min(start + max_steps, seq_len)
+            chunk = context_tensor[:, start:end]
+            chunk_embeddings.append(self._encode_single(chunk))
+
+        return torch.cat(chunk_embeddings, dim=1)
+
+    @torch.no_grad()
+    def _encode_single(self, context_tensor: torch.Tensor) -> torch.Tensor:
+        """Encode one context tensor in a single model forward pass."""
         context_tensor = context_tensor.to(self.device)
 
         if self._is_bolt:
