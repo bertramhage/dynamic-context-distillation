@@ -25,13 +25,12 @@ extract_job_id() {
 submit_train_job() {
   perm="$1"
   dep_expr="$2"
+  env_spec="all,PROJECT_ROOT=${PROJECT_ROOT},RUN_UV_SYNC=${RUN_UV_SYNC},TRAIN_PERM=${perm}"
 
   if [ -n "$dep_expr" ]; then
-    out=$(PROJECT_ROOT="$PROJECT_ROOT" RUN_UV_SYNC="$RUN_UV_SYNC" TRAIN_PERM="$perm" \
-      bsub -w "$dep_expr" -J "train_${perm}" < batch_jobs/train_hypernet_permutation.sh)
+    out=$(bsub -env "$env_spec" -w "$dep_expr" -J "train_${perm}" < batch_jobs/train_hypernet_permutation.sh)
   else
-    out=$(PROJECT_ROOT="$PROJECT_ROOT" RUN_UV_SYNC="$RUN_UV_SYNC" TRAIN_PERM="$perm" \
-      bsub -J "train_${perm}" < batch_jobs/train_hypernet_permutation.sh)
+    out=$(bsub -env "$env_spec" -J "train_${perm}" < batch_jobs/train_hypernet_permutation.sh)
   fi
 
   job_id=$(extract_job_id "$out")
@@ -46,16 +45,9 @@ submit_train_job() {
 submit_eval_job() {
   perm="$1"
   dep_expr="$2"
+  env_spec="all,PROJECT_ROOT=${PROJECT_ROOT},RUN_UV_SYNC=${RUN_UV_SYNC},TRAIN_PERM=${perm},STATION_SUBSET_FRACTION=${STATION_SUBSET_FRACTION},STATION_SUBSET_SEED=${STATION_SUBSET_SEED},CONTEXT_ENCODER_MODEL=${CONTEXT_ENCODER_MODEL},DYNAMIC_BATCH_SIZE=${DYNAMIC_BATCH_SIZE},ENCODE_BATCH_SIZE=${ENCODE_BATCH_SIZE}"
 
-  out=$(PROJECT_ROOT="$PROJECT_ROOT" \
-    RUN_UV_SYNC="$RUN_UV_SYNC" \
-    TRAIN_PERM="$perm" \
-    STATION_SUBSET_FRACTION="$STATION_SUBSET_FRACTION" \
-    STATION_SUBSET_SEED="$STATION_SUBSET_SEED" \
-    CONTEXT_ENCODER_MODEL="$CONTEXT_ENCODER_MODEL" \
-    DYNAMIC_BATCH_SIZE="$DYNAMIC_BATCH_SIZE" \
-    ENCODE_BATCH_SIZE="$ENCODE_BATCH_SIZE" \
-    bsub -w "$dep_expr" -J "eval_${perm}" < batch_jobs/eval_hypernet_permutation_matrix.sh)
+  out=$(bsub -env "$env_spec" -w "$dep_expr" -J "eval_${perm}" < batch_jobs/eval_hypernet_permutation_matrix.sh)
 
   job_id=$(extract_job_id "$out")
   if [ -z "$job_id" ]; then
