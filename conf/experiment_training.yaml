@@ -1,0 +1,91 @@
+# Training config for hypernetwork distillation.
+
+dataset_cfg: dataset/PEMS-BAY
+
+cross_learning: true
+batch_size: null
+seed: 42
+
+# --- Training data window ---
+training:
+  # Training time range (absolute dates)
+  train_start_date: "2017-01-01"
+  train_end_date: "2017-04-01"    # ~3 months for training
+  val_start_date: "2017-04-01"
+  val_end_date: "2017-05-01"      # ~1 month for validation
+
+  # Context window sizes (in timesteps at dataset freq)
+  long_context_steps: 2016        # 1 week at 5-min freq
+  short_context_steps: 512        # ~1.8 days
+  prediction_length: 12           # 12 steps = 1 hour at 5-min freq
+
+  # Optional hierarchical length jitter.
+  # Batch mean is sampled with sigma_outer, per-sample lengths use sigma_inner.
+  length_jitter:
+    enabled: false
+    apply_in_val: false
+    long_sigma_outer: 320.0
+    long_sigma_inner: 96.0
+    short_sigma_outer: 40.0
+    short_sigma_inner: 16.0
+    quantize_steps: 24
+    long_min_steps: 2016
+    long_max_steps: 8064
+    short_min_steps: 144
+    short_max_steps: 576
+
+  # Multi-query: multiple forecast origins per long context
+  n_queries_per_context: 16
+  query_stride_steps: 72          # 6 hours between forecast origins
+
+  # Rolling window stride for long context placement
+  long_context_stride_steps: 288  # 1 day
+
+  # Dataloader
+  train_batch_size: 16
+  num_workers: 4
+
+# --- Context encoder model ---
+context_encoder_model: "amazon/chronos-bolt-mini"
+
+# --- Hypernetwork architecture ---
+hypernet:
+  d_latent: 128                   # Perceiver/head latent dimension
+  lora_rank: 8
+  n_latent_queries: 32            # Perceiver bottleneck
+  num_perceiver_blocks: 1
+  n_self_attn_per_block: 1
+  n_heads: 8
+  num_pre_head_layers: 1
+  dropout: 0.1
+
+# --- Training hyperparams ---
+optimizer:
+  lr: 4.0e-5
+  weight_decay: 0.01
+
+training_loop:
+  target_mode: teacher           # teacher | ground_truth
+  max_epochs: 50
+  patience: 10
+  lora_scaling: 2.0               # alpha / rank = 16 / 8
+  l1_reg_coef: 0.0
+  grad_clip: 1.0
+  log_every: 10
+  checkpoint_dir: checkpoints
+  gradient_accumulation_steps: 2
+  warmup_steps: 100
+
+teacher_cache:
+  enabled: true
+  cache_dir: data/teacher_cache
+  dtype: float16
+  build_batch_size: 32
+  jitter_seed: 42               # defaults to global seed when null
+  rebuild: false
+
+wandb:
+  enabled: false
+  entity: null
+  run_name: null
+  tags: []

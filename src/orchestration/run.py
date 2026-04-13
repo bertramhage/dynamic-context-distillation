@@ -156,6 +156,143 @@ def _infer_output_layer_lora_dims(pipeline: Chronos2Pipeline) -> tuple[int, int]
     return int(layer.in_features), int(layer.out_features)
 
 
+class _DynamicLoraProvider:
+    """On-demand batched LoRA provider for dynamic evaluation runtime."""
+
+    def __init__(
+        self,
+        cfg,
+        df_long: pd.DataFrame,
+        hypernetwork,
+        context_encoder: ChronosContextEncoder,
+        sensor_ids: list[str],
+        encode_batch_size: int,
+    ) -> None:
+        self.cfg = cfg
+        self.df_long = df_long
+        self.hypernetwork = hypernetwork
+        self.context_encoder = context_encoder
+        self.sensor_ids = sensor_ids
+        self.encode_batch_size = int(encode_batch_size)
+        self.id_col = cfg.id_column
+        self.ts_col = cfg.timestamp_column
+        self.target_col = cfg.target
+        self.rolling = bool(getattr(cfg.orchestration, "rolling_long_history", False))
+
+        self._fixed_cache: dict | None = None
+        self._rolling_cache_time: pd.Timestamp | None = None
+        self._rolling_cache: dict | None = None
+
+    def _compute_cache(self, prediction_time: pd.Timestamp | None) -> dict:
+        """Compute (or recompute) cached LoRA tensors for a prediction step."""
+        if self.rolling:
+            if prediction_time is None:
+                raise ValueError("prediction_time must be provided for rolling dynamic LoRA.")
+            start_time, end_time = _long_history_window_rolling(self.cfg, prediction_time)
+        else:
+            start_time, end_time = _long_history_window_fixed(self.cfg)
+
+        context_tensor, ordered_ids = _extract_sensor_tensor(
+            self.df_long,
+            self.sensor_ids,
+            start_time,
+            end_time,
+            self.id_col,
+            self.ts_col,
+            self.target_col,
+        )
+
+        all_z = self.context_encoder.encode_last_hidden_batched(
+            context_tensor,
+            batch_size=self.encode_batch_size,
+        )
+        with torch.no_grad():
+            lora_dict = self.hypernetwork(all_z)
+
+        cpu_lora_dict = {}
+        for short_name, weights in lora_dict.items():
+            cpu_lora_dict[short_name] = {
+                "A": weights["A"].detach().to(device="cpu", dtype=torch.float32),
+                "B": weights["B"].detach().to(device="cpu", dtype=torch.float32),
+            }
+
+        id_to_idx = {str(sensor_id): idx for idx, sensor_id in enumerate(ordered_ids)}
+        return {
+            "id_to_idx": id_to_idx,
+            "lora_dict": cpu_lora_dict,
+        }
+
+    def _get_cache(self, prediction_time: pd.Timestamp) -> dict:
+        """Get current cache for fixed/rolling long-history mode."""
+        if not self.rolling:
+            if self._fixed_cache is None:
+                self._fixed_cache = self._compute_cache(prediction_time=None)
+            return self._fixed_cache
+
+        prediction_time = pd.Timestamp(prediction_time)
+        if self._rolling_cache_time != prediction_time:
+            self._rolling_cache = self._compute_cache(prediction_time=prediction_time)
+            self._rolling_cache_time = prediction_time
+        return self._rolling_cache
+
+    def get_step_lora_batch(
+        self,
+        prediction_time: pd.Timestamp,
+        item_ids: list[str],
+        adapter_ids: list[str],
+        default_adapter_id: str,
+        device: torch.device,
+    ) -> dict[str, dict[str, torch.Tensor]]:
+        """Build batched LoRA tensors for one evaluation step.
+
+        For `default_adapter_id` tasks, this returns zero-LoRA rows so base
+        behavior is preserved for those samples.
+        """
+        if len(item_ids) != len(adapter_ids):
+            raise ValueError("item_ids and adapter_ids must have identical lengths.")
+
+        cache = self._get_cache(prediction_time=prediction_time)
+        id_to_idx = cache["id_to_idx"]
+        lora_dict = cache["lora_dict"]
+
+        out = {
+            short_name: {"A": [], "B": []}
+            for short_name in lora_dict.keys()
+        }
+        zero_cache = {
+            short_name: {
+                "A": torch.zeros_like(weights["A"][0]),
+                "B": torch.zeros_like(weights["B"][0]),
+            }
+            for short_name, weights in lora_dict.items()
+        }
+
+        for item_id, adapter_id in zip(item_ids, adapter_ids):
+            item_key = str(item_id)
+            if item_key not in id_to_idx:
+                raise ValueError(
+                    f"Missing dynamic LoRA tensors for item_id '{item_key}' at step {prediction_time}."
+                )
+            src_idx = id_to_idx[item_key]
+            use_base = str(adapter_id) == str(default_adapter_id)
+
+            for short_name, weights in lora_dict.items():
+                if use_base:
+                    out[short_name]["A"].append(zero_cache[short_name]["A"])
+                    out[short_name]["B"].append(zero_cache[short_name]["B"])
+                else:
+                    out[short_name]["A"].append(weights["A"][src_idx])
+                    out[short_name]["B"].append(weights["B"][src_idx])
+
+        batched = {}
+        for short_name, tensors in out.items():
+            batched[short_name] = {
+                "A": torch.stack(tensors["A"], dim=0).to(device=device),
+                "B": torch.stack(tensors["B"], dim=0).to(device=device),
+            }
+        return batched
+
+
 # ---------------------------------------------------------------------------
 # Core orchestration
 # ---------------------------------------------------------------------------
@@ -180,13 +317,10 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
     # ---- load dataset ----
     df_long = shared_utils.load_dataset(cfg)
 
-    # ---- load Chronos-2 pipeline ----
+    # ---- load Chronos-2 pipeline (student/eval model) ----
     pipeline: Chronos2Pipeline = BaseChronosPipeline.from_pretrained(
         "amazon/chronos-2", device_map=device,
     )
-
-    # ---- context encoder (frozen Chronos-2) ----
-    context_encoder = ChronosContextEncoder(pipeline)
 
     # ---- load hypernetwork checkpoint ----
     checkpoint_path = str(orch.checkpoint_path)
@@ -196,11 +330,26 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
     for p in hypernetwork.parameters():
         p.requires_grad = False
 
-    # ---- adapter output directory ----
-    run_id = getattr(orch, "run_id", None) or str(uuid.uuid4())[:8]
-    adapter_root = Path(str(orch.adapter_output_dir)) / run_id
-    adapter_root.mkdir(parents=True, exist_ok=True)
-    print(f"Adapters will be saved to {adapter_root}")
+    expected_context_d = None
+    if hasattr(hypernetwork, "perceiver") and hasattr(hypernetwork.perceiver, "d_input"):
+        expected_context_d = int(hypernetwork.perceiver.d_input)
+
+    # ---- context encoder (must match training setup) ----
+    context_model_name = str(cfg.get("context_encoder_model", "amazon/chronos-bolt-mini"))
+    context_pipeline = BaseChronosPipeline.from_pretrained(
+        context_model_name, device_map=device,
+    )
+    context_encoder = ChronosContextEncoder(context_pipeline)
+    context_d_model = int(context_pipeline.model.config.d_model)
+    print(f"Context encoder loaded: {context_model_name} (d_model={context_d_model})")
+
+    if expected_context_d is not None and context_d_model != expected_context_d:
+        raise ValueError(
+            "Context encoder dimension mismatch with checkpoint: "
+            f"hypernetwork expects d_input={expected_context_d}, "
+            f"but {context_model_name} provides d_model={context_d_model}. "
+            "Set context_encoder_model to the model used during training."
+        )
 
     # ---- gather sensor ids ----
     id_col = cfg.id_column
@@ -208,6 +357,11 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
     target_col = cfg.target
     sensor_ids = sorted(df_long[id_col].dropna().astype(str).unique().tolist())
     print(f"Number of sensors: {len(sensor_ids)}")
+
+    evaluation_cfg = getattr(cfg, "evaluation", None)
+    use_dynamic_lora = bool(
+        evaluation_cfg is not None and evaluation_cfg.get("use_dynamic_lora", False)
+    )
 
     # ---- adapter config from cfg ----
     adapter_cfg = getattr(cfg, "adapter", None)
@@ -225,6 +379,24 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
     rolling = bool(getattr(orch, "rolling_long_history", False))
     encode_batch_size = int(getattr(orch, "encode_batch_size", 32))
 
+    dynamic_lora_provider = None
+    adapter_root = None
+    if use_dynamic_lora:
+        print("Dynamic LoRA runtime enabled: using in-memory adapter tensors.")
+        dynamic_lora_provider = _DynamicLoraProvider(
+            cfg=cfg,
+            df_long=df_long,
+            hypernetwork=hypernetwork,
+            context_encoder=context_encoder,
+            sensor_ids=sensor_ids,
+            encode_batch_size=encode_batch_size,
+        )
+    else:
+        run_id = getattr(orch, "run_id", None) or str(uuid.uuid4())[:8]
+        adapter_root = Path(str(orch.adapter_output_dir)) / run_id
+        adapter_root.mkdir(parents=True, exist_ok=True)
+        print(f"Adapters will be saved to {adapter_root}")
+
     assignment_rows: list[dict] = []
 
     if not rolling:
@@ -232,72 +404,39 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
         # FIXED long history: one adapter per sensor (shared across
         # all prediction times).
         # -----------------------------------------------------------
-        long_start, long_end = _long_history_window_fixed(cfg)
-        print(f"Fixed long history: {long_start} -> {long_end}")
-
-        context_tensor, ordered_ids = _extract_sensor_tensor(
-            df_long, sensor_ids, long_start, long_end, id_col, ts_col, target_col,
-        )
-        print(f"Context tensor shape: {context_tensor.shape}")
-
-        # Encode through frozen Chronos-2, collecting per-layer intermediates.
-        all_z = context_encoder.encode_intermediates_batched(
-            context_tensor, batch_size=encode_batch_size,
-        )
-        # all_z: [n_sensors, num_layers=12, num_context_patches, d_model=768]
-        # all_z[:, l, :, :] = Z_l = input to block l, used to generate LoRA for block l.
-
-        # Run hypernetwork: shared Perceiver applied per-layer internally.
-        lora_dict = hypernetwork(all_z)
-        # Expected: {"q": {"A": [n_sensors, 12, r, d_in], "B": [n_sensors, 12, d_out, r]}, ...}
-
-        # Save one adapter per sensor.
-        for sensor_batch_idx, sensor_id in enumerate(ordered_ids):
-            adapter_id = sensor_id
-            adapter_dir = adapter_root / adapter_id
-            save_adapter_to_disk(
-                lora_dict,
-                sensor_idx=sensor_batch_idx,
-                adapter_dir=adapter_dir,
-                rank=rank,
-                alpha=alpha,
-                output_lora_d_in=output_lora_d_in,
-                output_lora_d_out=output_lora_d_out,
-                target_modules=target_modules,
-            )
-
-            # Same adapter for every prediction time.
-            for pt in prediction_times:
-                assignment_rows.append(
-                    {
-                        id_col: sensor_id,
-                        "prediction_time": pt,
-                        "adapter_id": adapter_id,
-                    }
-                )
-
-        print(f"Saved {len(ordered_ids)} adapters (fixed long history)")
-
-    else:
-        # -----------------------------------------------------------
-        # ROLLING long history: one adapter per sensor per step.
-        # -----------------------------------------------------------
-        for step_idx, pt in enumerate(prediction_times):
-            long_start, long_end = _long_history_window_rolling(cfg, pt)
+        if use_dynamic_lora:
+            for sensor_id in sensor_ids:
+                adapter_id = sensor_id
+                for pt in prediction_times:
+                    assignment_rows.append(
+                        {
+                            id_col: sensor_id,
+                            "prediction_time": pt,
+                            "adapter_id": adapter_id,
+                        }
+                    )
+            print(f"Prepared {len(sensor_ids)} dynamic adapters (fixed long history)")
+        else:
+            long_start, long_end = _long_history_window_fixed(cfg)
+            print(f"Fixed long history: {long_start} -> {long_end}")
 
             context_tensor, ordered_ids = _extract_sensor_tensor(
                 df_long, sensor_ids, long_start, long_end, id_col, ts_col, target_col,
             )
+            print(f"Context tensor shape: {context_tensor.shape}")
 
-            all_z = context_encoder.encode_intermediates_batched(
+            # Encode long contexts exactly like training (last hidden states).
+            all_z = context_encoder.encode_last_hidden_batched(
                 context_tensor, batch_size=encode_batch_size,
             )
-            # all_z: [n_sensors, num_layers=12, num_context_patches, d_model=768]
+            # all_z: [n_sensors, num_context_patches, d_model]
 
+            # Run hypernetwork: outputs per-layer LoRA weights for Chronos-2.
             lora_dict = hypernetwork(all_z)
 
+            # Save one adapter per sensor.
             for sensor_batch_idx, sensor_id in enumerate(ordered_ids):
-                adapter_id = f"{sensor_id}_step{step_idx}"
+                adapter_id = sensor_id
                 adapter_dir = adapter_root / adapter_id
                 save_adapter_to_disk(
                     lora_dict,
@@ -310,24 +449,83 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
                     target_modules=target_modules,
                 )
 
-                assignment_rows.append(
-                    {
-                        id_col: sensor_id,
-                        "prediction_time": pt,
-                        "adapter_id": adapter_id,
-                    }
+                # Same adapter for every prediction time.
+                for pt in prediction_times:
+                    assignment_rows.append(
+                        {
+                            id_col: sensor_id,
+                            "prediction_time": pt,
+                            "adapter_id": adapter_id,
+                        }
+                    )
+
+            print(f"Saved {len(ordered_ids)} adapters (fixed long history)")
+
+    else:
+        # -----------------------------------------------------------
+        # ROLLING long history: one adapter per sensor per step.
+        # -----------------------------------------------------------
+        if use_dynamic_lora:
+            for step_idx, pt in enumerate(prediction_times):
+                for sensor_id in sensor_ids:
+                    assignment_rows.append(
+                        {
+                            id_col: sensor_id,
+                            "prediction_time": pt,
+                            "adapter_id": f"{sensor_id}_step{step_idx}",
+                        }
+                    )
+            print(
+                f"Prepared {len(prediction_times) * len(sensor_ids)} dynamic adapters "
+                f"(rolling long history)"
+            )
+        else:
+            for step_idx, pt in enumerate(prediction_times):
+                long_start, long_end = _long_history_window_rolling(cfg, pt)
+
+                context_tensor, ordered_ids = _extract_sensor_tensor(
+                    df_long, sensor_ids, long_start, long_end, id_col, ts_col, target_col,
                 )
 
-            if (step_idx + 1) % 10 == 0 or step_idx == 0:
-                print(
-                    f"Step {step_idx + 1}/{len(prediction_times)}: "
-                    f"generated {len(ordered_ids)} adapters"
+                all_z = context_encoder.encode_last_hidden_batched(
+                    context_tensor, batch_size=encode_batch_size,
                 )
+                # all_z: [n_sensors, num_context_patches, d_model]
 
-        print(
-            f"Saved {len(prediction_times) * len(sensor_ids)} adapters "
-            f"(rolling long history)"
-        )
+                lora_dict = hypernetwork(all_z)
+
+                for sensor_batch_idx, sensor_id in enumerate(ordered_ids):
+                    adapter_id = f"{sensor_id}_step{step_idx}"
+                    adapter_dir = adapter_root / adapter_id
+                    save_adapter_to_disk(
+                        lora_dict,
+                        sensor_idx=sensor_batch_idx,
+                        adapter_dir=adapter_dir,
+                        rank=rank,
+                        alpha=alpha,
+                        output_lora_d_in=output_lora_d_in,
+                        output_lora_d_out=output_lora_d_out,
+                        target_modules=target_modules,
+                    )
+
+                    assignment_rows.append(
+                        {
+                            id_col: sensor_id,
+                            "prediction_time": pt,
+                            "adapter_id": adapter_id,
+                        }
+                    )
+
+                if (step_idx + 1) % 10 == 0 or step_idx == 0:
+                    print(
+                        f"Step {step_idx + 1}/{len(prediction_times)}: "
+                        f"generated {len(ordered_ids)} adapters"
+                    )
+
+            print(
+                f"Saved {len(prediction_times) * len(sensor_ids)} adapters "
+                f"(rolling long history)"
+            )
 
     assignments_df = pd.DataFrame(assignment_rows)
 
@@ -341,8 +539,9 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
         "evaluation.history_length_steps",
         int(orch.short_context_length_steps),
     )
-    # Point the adapter root to our generated adapters.
-    OmegaConf.update(cfg, "adapter.adapter_root", str(adapter_root))
+    if not use_dynamic_lora:
+        # Point the adapter root to generated on-disk adapters.
+        OmegaConf.update(cfg, "adapter.adapter_root", str(adapter_root))
 
     print(
         f"\nStarting evaluation with short context = "
@@ -356,6 +555,7 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
         pipeline=pipeline,
         df_long=df_long,
         assignments_df=assignments_df,
+        dynamic_lora_provider=dynamic_lora_provider,
         return_runtime=True,
     )
 

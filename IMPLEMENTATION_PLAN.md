@@ -169,6 +169,20 @@ Long history (2016 steps) → Chronos-2 patch embedding → Chronos-2 encoder (f
 
 **Key implementation detail**: D2L's `lora_forward` expects shape `[n_ctx, r, d_in]` for A and `[n_ctx, r, d_out]` for B, with `n_ctx` being the batch dimension of different contexts. For our use case, each context is a station's history, so `n_ctx` = batch of stations.
 
+#### What to keep (and modify) from D2L
+1. Reuse (Mostly As-Is)
+These files operate purely on PyTorch tensors and don't care whether the data came from text or time-series.
+- **lora_layer.py**: The most important file to keep. This contains the custom standard Linear overrides (DynamicLoraLinear, etc.) that allow you to inject LoRA A and B weights at runtime during the forward pass. You can use this directly to wrap Chronos-2's internal transformer layers.
+- **aggregator.py**: If your time-series context encoder outputs a sequence of embeddings (e.g., [batch, sequence_length, hidden_dim]), this file contains the logic (mean pooling, attention blocks) to distill that sequence down into a single [batch, hidden_dim] conditioning vector.
+
+2. Reuse With Modifications
+These files contain the right mathematical ideas but are currently tangled up with HuggingFace text-model assumptions (like AutoModelForCausalLM).
+**hypernet.py**:
+- Keep: The projection heads (the actual nn.Linear layers that scale up the conditioning vector into the massive flattened LoRA matrices).
+- Modify: Strip out ModulatedPretrainedModel. Replace it with a simpler generator class that just takes a tensor and returns a dictionary of weights.
+**utils.py**:
+Keep: Helpful PyTorch utilities like compile_linear, log_num_train_params, or basic YAML loading.
+
 ---
 
 ### Phase 3: Teacher-Student Training Loop (Day 7–11)
@@ -226,3 +240,53 @@ Short history (256 steps) + LoRA weights → Chronos-2 (frozen + LoRA) → stude
 - Analyze: on which stations/time periods does the student beat the teacher? Is it correlated with history noise level?
 
 **Evaluation reuses mobility-baselines' sliding window approach** — same horizons, same metrics. We can try different horizons as long as we compare the same horizons (full context) between the benchmark and our approach.
+
+---
+
+### Phase 5: RQ3 — Ground-Truth Supervision Instead of Teacher Distillation
+
+**RQ3**:
+"If we replace the teacher target in the KL divergence with
+ground-truth labels, does performance improve beyond the
+baseline?"
+
+**Goal**: Evaluate whether training the hypernetwork directly against observed future values (instead of teacher outputs) improves downstream forecasting quality.
+
+**Design change**:
+- Keep the same architecture and data construction (long context -> hypernetwork -> LoRA, short context -> student Chronos-2).
+- Replace the teacher-target objective with a ground-truth-target objective.
+- Preserve the same train/validation split and rolling-window multi-query setup to keep comparisons fair.
+
+**Training pipeline (RQ3 variant)**:
+```
+Long history -> Context Encoder (frozen) -> Perceiver -> HyperLoRA -> LoRA weights
+Short history + LoRA weights -> Chronos-2 (frozen + LoRA) -> student_output
+student_output vs ground_truth_targets -> supervised loss
+```
+
+**Loss**:
+- Use **CRPS (Continuous Ranked Probability Score)** between student predictive distributions and ground-truth targets.
+
+**Implementation tasks**:
+- Add a training-mode switch for objective target:
+  - `target_mode: teacher | ground_truth`
+- In the trainer loop:
+  - Skip teacher forward pass when `target_mode=ground_truth`.
+  - Compute supervised **CRPS** loss from `batch.targets` and student quantile predictions.
+- Remove teacher-context construction in the RQ3 path to reduce compute and memory overhead.
+
+**Evaluation protocol for RQ3**:
+- Compare three systems under identical evaluation settings:
+  1. Short-context baseline (no LoRA).
+  2. Distilled student (RQ1/RQ2 teacher-target training).
+  3. Ground-truth-supervised student (RQ3).
+- Report MAE, MAPE, RMSE, CRPS, coverage, IQR width, and runtime/memory.
+- Use the same horizons and test windows as RQ1/RQ2.
+
+**Primary success criterion**:
+- RQ3 student outperforms the short-context baseline on core metrics (MAE/RMSE) without unacceptable degradation of probabilistic calibration (coverage/IQR/CRPS).
+
+**Analysis focus**:
+- Where does direct supervision help most (horizon length, station type, traffic regime)?
+- Does RQ3 beat distillation consistently, or only in specific regimes?
+- Does CRPS-trained supervision improve both point accuracy and uncertainty calibration relative to distillation?
