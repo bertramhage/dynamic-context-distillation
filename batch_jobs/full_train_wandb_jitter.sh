@@ -56,11 +56,11 @@ TRAIN_RUN_NAME="training_jitter_${RUN_ID}"
 echo "Starting full-scale training run with jitter: ${TRAIN_RUN_NAME}"
 uv run python -m src.training.main \
   training.long_context_steps=4032 \
-  training.short_context_steps=256 \
+  training.short_context_steps=288 \
   training.query_stride_steps=72 \
   training.train_batch_size=64 \
   training.num_workers=4 \
-  training_loop.gradient_accumulation_steps=1 \
+  training_loop.gradient_accumulation_steps=2 \
   training.length_jitter.enabled=true \
   wandb.enabled=true \
   training_loop.checkpoint_dir=checkpoints/jitter_01 \
