@@ -4,7 +4,7 @@
 #BSUB -J train_hypernet_perm
 
 ### Queue Name:
-#BSUB -q gpua40
+#BSUB -q gpul40s
 
 ### Requesting one host
 #BSUB -R "span[hosts=1]"
