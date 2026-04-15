@@ -1,7 +1,7 @@
 #!/bin/sh
 
 ### Job Name:
-#BSUB -J eval_only_new_01
+#BSUB -J eval_only_new_01_7d_t
 
 ### Queue Name:
 #BSUB -q "gpua10 gpua40 gpul40s gpuh100 gpua100"
@@ -47,7 +47,7 @@ if [ "${RUN_UV_SYNC:-1}" = "1" ]; then
 fi
 
 # Checkpoint path
-CHECKPOINT_PATH="checkpoints/train_01/best_hypernet.pt"
+CHECKPOINT_PATH="checkpoints/final_7d_t/best_hypernet.pt"
 
 if [ ! -f "$CHECKPOINT_PATH" ]; then
   echo "Checkpoint not found at ${CHECKPOINT_PATH}"
@@ -61,7 +61,7 @@ echo "Starting standalone evaluation run: ${ORCH_RUN_NAME}"
 uv run python -m src.orchestration.main \
   "orchestration.checkpoint_path=${CHECKPOINT_PATH}" \
   "orchestration.run_id=${RUN_ID}" \
-  orchestration.long_history_length_steps=4032 \
+  orchestration.long_history_length_steps=2016 \
   orchestration.short_context_length_steps=288 \
   stride_steps=1 \
   start_test_day=null \

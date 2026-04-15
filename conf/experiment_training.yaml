@@ -2,7 +2,7 @@
 
 dataset_cfg: dataset/PEMS-BAY
 
-cross_learning: true
+cross_learning: false
 batch_size: null
 seed: 42
 
@@ -16,7 +16,7 @@ training:
 
   # Context window sizes (in timesteps at dataset freq)
   long_context_steps: 2016        # 1 week at 5-min freq
-  short_context_steps: 512        # ~1.8 days
+  short_context_steps: 288        # 1 day
   prediction_length: 12           # 12 steps = 1 hour at 5-min freq
 
   # Optional hierarchical length jitter.
@@ -29,20 +29,20 @@ training:
     short_sigma_outer: 40.0
     short_sigma_inner: 16.0
     quantize_steps: 24
-    long_min_steps: 2016
-    long_max_steps: 8064
+    long_min_steps: 1008
+    long_max_steps: 4032
     short_min_steps: 144
-    short_max_steps: 576
+    short_max_steps: 432
 
   # Multi-query: multiple forecast origins per long context
   n_queries_per_context: 16
-  query_stride_steps: 72          # 6 hours between forecast origins
+  query_stride_steps: 48          # 4 hours between forecast origins
 
   # Rolling window stride for long context placement
   long_context_stride_steps: 288  # 1 day
 
   # Dataloader
-  train_batch_size: 16
+  train_batch_size: 64
   num_workers: 4
 
 # --- Context encoder model ---
@@ -52,10 +52,10 @@ training:
 #   amazon/chronos-bolt-base   — 2048 / 768
 #   amazon/chronos-2           — 8192 / 768
 # long_context_steps (and jitter long_max_steps) must not exceed context_length.
-context_encoder_model: "amazon/chronos-bolt-mini"
+context_encoder_model: "amazon/chronos-2"
 # Early exit for Chronos-2: stop after N encoder layers (null = all 12).
 # Ignored for Chronos-Bolt models. Must be in [1, total_layers].
-context_encoder_num_layers: null
+context_encoder_num_layers: 8
 
 # --- Hypernetwork architecture ---
 hypernet:
@@ -75,7 +75,7 @@ optimizer:
 
 training_loop:
   target_mode: teacher           # teacher | ground_truth
-  max_epochs: 50
+  max_epochs: 100
   patience: 10
   lora_scaling: 2.0               # alpha / rank = 16 / 8
   l1_reg_coef: 0.0

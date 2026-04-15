@@ -2,7 +2,7 @@
 
 dataset_cfg: dataset/PEMS-BAY
 
-cross_learning: true
+cross_learning: false
 batch_size: null
 seed: 42
 
@@ -15,7 +15,7 @@ proportion_test: null
 quantile_levels: [0.1, 0.5, 0.9]
 
 evaluation:
-  use_dynamic_lora: false
+  use_dynamic_lora: true
   dynamic_batch_size: null
 
 # Context encoder for hypernetwork input path.
@@ -26,10 +26,10 @@ evaluation:
 #   amazon/chronos-bolt-base   — 2048 / 768
 #   amazon/chronos-2           — 8192 / 768
 # long_history_length_steps must not exceed context_length.
-context_encoder_model: "amazon/chronos-bolt-mini"
+context_encoder_model: "amazon/chronos-2"
 # Early exit for Chronos-2: stop after N encoder layers (null = all 12).
 # Ignored for Chronos-Bolt models. Must be in [1, total_layers].
-context_encoder_num_layers: null
+context_encoder_num_layers: 8
 
 # --- Orchestration-specific settings ---
 orchestration:
@@ -52,7 +52,7 @@ orchestration:
   long_history_end_offset_steps: 0
 
   # Short context: passed directly to evaluation as the inference context.
-  short_context_length_steps: 512
+  short_context_length_steps: 288
 
   # Output directory for generated PEFT adapters.
   adapter_output_dir: outputs/adapters

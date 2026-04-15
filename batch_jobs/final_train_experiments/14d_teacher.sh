@@ -1,10 +1,13 @@
 #!/bin/sh
 
 ### Job Name:
-#BSUB -J train_only_new_01
+#BSUB -J train_only_new_01_14d_t
 
 ### Queue Name:
-#BSUB -q "gpua40 gpul40s gpuh100 gpua100"
+#BSUB -q "gpua100"
+
+### Ensure 80GB GPU used
+#BSUB -R "select[gpu80gb]"
 
 ### Requesting one host
 #BSUB -R "span[hosts=1]"
@@ -51,15 +54,27 @@ TRAIN_RUN_NAME="${RUN_ID}"
 
 echo "Starting full-scale training run with jitter: ${TRAIN_RUN_NAME}"
 uv run python -m src.training.main \
-  training.long_context_steps=2016 \
+  training.long_context_steps=4032 \
   training.short_context_steps=288 \
   training.train_batch_size=64 \
   training.num_workers=4 \
   training_loop.gradient_accumulation_steps=2 \
   training.length_jitter.enabled=true \
+  training.length_jitter.long_sigma_outer=640.0 \
+  training.length_jitter.long_sigma_inner=192.0 \
+  training.length_jitter.short_sigma_outer=40.0 \
+  training.length_jitter.short_sigma_inner=16.0 \
+  training.length_jitter.quantize_steps=24 \
+  training.length_jitter.long_min_steps=2016 \
+  training.length_jitter.long_max_steps=8064 \
+  training.length_jitter.short_min_steps=144 \
+  training.length_jitter.short_max_steps=432 \
   wandb.enabled=true \
-  training_loop.checkpoint_dir=checkpoints/jitter_01 \
+  training_loop.target_mode=teacher \
+  training_loop.checkpoint_dir=checkpoints/final_14d_t \
   "wandb.run_name=${TRAIN_RUN_NAME}" \
   "wandb.tags=[hpc,fullscale,training]"
 
 echo "Training jitter job finished successfully."
+
+bsub < batch_jobs/final_train_experiments/evals/eval_14d_teacher.sh

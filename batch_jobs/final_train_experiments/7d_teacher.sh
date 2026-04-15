@@ -1,10 +1,13 @@
 #!/bin/sh
 
 ### Job Name:
-#BSUB -J train_only_new_01
+#BSUB -J train_only_new_01_7d_t
 
 ### Queue Name:
-#BSUB -q "gpua40 gpul40s gpuh100 gpua100"
+#BSUB -q "gpua100"
+
+### Ensure 80GB GPU used
+#BSUB -R "select[gpu80gb]"
 
 ### Requesting one host
 #BSUB -R "span[hosts=1]"
@@ -57,9 +60,21 @@ uv run python -m src.training.main \
   training.num_workers=4 \
   training_loop.gradient_accumulation_steps=2 \
   training.length_jitter.enabled=true \
+  training.length_jitter.long_sigma_outer=320.0 \
+  training.length_jitter.long_sigma_inner=96.0 \
+  training.length_jitter.short_sigma_outer=40.0 \
+  training.length_jitter.short_sigma_inner=16.0 \
+  training.length_jitter.quantize_steps=24 \
+  training.length_jitter.long_min_steps=1008 \
+  training.length_jitter.long_max_steps=4032 \
+  training.length_jitter.short_min_steps=144 \
+  training.length_jitter.short_max_steps=432 \
   wandb.enabled=true \
-  training_loop.checkpoint_dir=checkpoints/jitter_01 \
+  training_loop.target_mode=teacher \
+  training_loop.checkpoint_dir=checkpoints/final_7d_t \
   "wandb.run_name=${TRAIN_RUN_NAME}" \
   "wandb.tags=[hpc,fullscale,training]"
 
 echo "Training jitter job finished successfully."
+
+bsub < batch_jobs/final_train_experiments/evals/eval_7d_teacher.sh

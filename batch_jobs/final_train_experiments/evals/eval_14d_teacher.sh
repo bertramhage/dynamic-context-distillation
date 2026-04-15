@@ -1,7 +1,7 @@
 #!/bin/sh
 
 ### Job Name:
-#BSUB -J eval_only_new_01
+#BSUB -J eval_only_new_01_14d_t
 
 ### Queue Name:
 #BSUB -q "gpua10 gpua40 gpul40s gpuh100 gpua100"
@@ -47,7 +47,7 @@ if [ "${RUN_UV_SYNC:-1}" = "1" ]; then
 fi
 
 # Checkpoint path
-CHECKPOINT_PATH="checkpoints/train_01/best_hypernet.pt"
+CHECKPOINT_PATH="checkpoints/final_14d_t/best_hypernet.pt"
 
 if [ ! -f "$CHECKPOINT_PATH" ]; then
   echo "Checkpoint not found at ${CHECKPOINT_PATH}"
