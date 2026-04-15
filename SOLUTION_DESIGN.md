@@ -139,7 +139,7 @@ The training layer supports two supervision objectives to train a hypernetwork t
 
 2. **Teacher cache** (`teacher_cache.py`): in `target_mode=teacher`, before epoch training begins, the pipeline resolves a deterministic per-sample context-length realization (seeded jitter), computes frozen Chronos-2 teacher quantile outputs once, and saves them to disk. Cache file names are keyed by a hash that includes dataset windowing, explicit split date window (train/val start-end), jitter config + seed, and teacher-model identity metadata (name + optional revision). Matching caches are loaded instead of rebuilt. In `target_mode=ground_truth`, this cache path is not used.
 
-3. **Context encoding**: a separate frozen context encoder model (default: Chronos-Bolt-Mini, configurable via `context_encoder_model`) encodes the long context and returns its last hidden state `[batch, num_patches, d_model]`. This is cheaper than the original approach of capturing per-layer intermediates from Chronos-2, and avoids tying the context encoder to the student/teacher model. `ChronosContextEncoder` supports both Chronos-Bolt (T5-based `encode()`) and Chronos-2 (manual block loop) backends.
+3. **Context encoding**: a separate frozen context encoder model (configurable via `context_encoder_model`) encodes the long context and returns its last hidden state `[batch, num_patches, d_model]`. Supported models are Chronos-Bolt (Mini/Small/Base, context limit 2048, T5-based `encode()`) and Chronos-2 (context limit 8192, manual block loop). The pipeline validates at startup that `long_context_steps` (including jitter bounds) does not exceed the chosen encoder's context limit, raising an error if it does. For Chronos-2, `context_encoder_num_layers` allows early exit after N of the 12 encoder blocks to reduce compute cost (ignored for Bolt, which uses an opaque `encode()` method).
 
 4. **Hypernetwork** (`HyperLoRA`): a Perceiver aggregator compresses the context encoder output into fixed-size latent queries, which are processed by ResMLPBlock layers and projected via EinMix heads to produce LoRA A/B matrices for each target module across all 12 encoder layers. The EinMix head is initialized with a custom small std (`0.5 / sqrt(d_latent + d_lora * rank)`) to prevent wild initial LoRA outputs.
 
@@ -243,9 +243,9 @@ At runtime, orchestration validates context-encoder compatibility by checking th
 - **Rolling** (`rolling_long_history: true`): the long-history window moves with the evaluation rolling window → one adapter per sensor per step.
 
 ### Context encoder
-`ChronosContextEncoder` wraps a frozen Chronos model (Chronos-2 or Chronos-Bolt). It provides two methods:
-- `encode_last_hidden(context)`: returns only the last hidden state `[batch, num_patches, d_model]`. Used by the training loop. Supports both Chronos-Bolt (uses built-in `encode()`) and Chronos-2 (manual block loop).
-- `encode_intermediates(context)`: returns per-layer hidden states `[batch, num_layers, num_patches, d_model]`. Retained for backward compatibility. Only works with Chronos-2.
+`ChronosContextEncoder` wraps a frozen Chronos model (Chronos-2 or Chronos-Bolt). It exposes `max_context_length` and provides two methods:
+- `encode_last_hidden(context)`: returns only the last hidden state `[batch, num_patches, d_model]`. Raises `ValueError` if context length exceeds the encoder's capacity. Supports both Chronos-Bolt (uses built-in `encode()`) and Chronos-2 (manual block loop, respects `num_encoder_layers` for early exit).
+- `encode_intermediates(context)`: returns per-layer hidden states `[batch, num_layers, num_patches, d_model]`. Retained for backward compatibility. Only works with Chronos-2. Also respects `num_encoder_layers`.
 
 Supports batched encoding to control GPU memory.
 

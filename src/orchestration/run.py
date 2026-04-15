@@ -339,9 +339,28 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
     context_pipeline = BaseChronosPipeline.from_pretrained(
         context_model_name, device_map=device,
     )
-    context_encoder = ChronosContextEncoder(context_pipeline)
+    num_encoder_layers = cfg.get("context_encoder_num_layers", None)
+    if num_encoder_layers is not None:
+        num_encoder_layers = int(num_encoder_layers)
+    context_encoder = ChronosContextEncoder(
+        context_pipeline, num_encoder_layers=num_encoder_layers,
+    )
     context_d_model = int(context_pipeline.model.config.d_model)
-    print(f"Context encoder loaded: {context_model_name} (d_model={context_d_model})")
+    max_ctx = context_encoder.max_context_length
+    print(
+        f"Context encoder loaded: {context_model_name} "
+        f"(d_model={context_d_model}, max_context_length={max_ctx}"
+        f", num_encoder_layers={context_encoder.num_encoder_layers})"
+    )
+
+    long_steps = int(cfg.orchestration.long_history_length_steps)
+    if long_steps > max_ctx:
+        raise ValueError(
+            f"long_history_length_steps={long_steps} exceeds context encoder "
+            f"capacity ({max_ctx}) of {context_model_name}. "
+            f"Either reduce long_history_length_steps or choose a model with "
+            f"a larger context window (e.g. amazon/chronos-2 supports 8192)."
+        )
 
     if expected_context_d is not None and context_d_model != expected_context_d:
         raise ValueError(

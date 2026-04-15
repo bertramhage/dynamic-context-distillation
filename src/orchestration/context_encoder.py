@@ -11,11 +11,40 @@ class ChronosContextEncoder:
     (T5-based encoder with a clean encode() method).
     """
 
-    def __init__(self, pipeline: BaseChronosPipeline):
+    def __init__(
+        self,
+        pipeline: BaseChronosPipeline,
+        num_encoder_layers: int | None = None,
+    ):
         self.model = pipeline.model
         self.model.eval()
         self.device = next(self.model.parameters()).device
         self._is_bolt = isinstance(self.model, ChronosBoltModelForForecasting)
+
+        # Resolve and validate num_encoder_layers (Chronos-2 only).
+        if self._is_bolt:
+            self.num_encoder_layers: int | None = None
+            if num_encoder_layers is not None:
+                print(
+                    f"Warning: num_encoder_layers={num_encoder_layers} ignored "
+                    f"for Chronos-Bolt (uses opaque encode() method)."
+                )
+        else:
+            total_layers = len(self.model.encoder.block)
+            if num_encoder_layers is None:
+                self.num_encoder_layers = total_layers
+            else:
+                if not 1 <= num_encoder_layers <= total_layers:
+                    raise ValueError(
+                        f"num_encoder_layers={num_encoder_layers} out of range "
+                        f"[1, {total_layers}] for this Chronos-2 model."
+                    )
+                self.num_encoder_layers = num_encoder_layers
+
+    @property
+    def max_context_length(self) -> int:
+        """Maximum number of timesteps the encoder accepts in a single pass."""
+        return self.model.chronos_config.context_length
 
     @torch.no_grad()
     def encode_last_hidden(self, context_tensor: torch.Tensor) -> torch.Tensor:
@@ -23,8 +52,18 @@ class ChronosContextEncoder:
 
         For Chronos-Bolt models, uses the built-in encode() method.
         For Chronos-2 models, runs the full encoder and returns the final output.
+
+        Raises:
+            ValueError: If context length exceeds the encoder's maximum.
         """
         context_tensor = context_tensor.to(self.device)
+        seq_len = context_tensor.shape[-1]
+        if seq_len > self.max_context_length:
+            raise ValueError(
+                f"Context length {seq_len} exceeds encoder capacity "
+                f"{self.max_context_length}. Use a model with a larger "
+                f"context window or reduce long_context_steps."
+            )
 
         if self._is_bolt:
             # ChronosBolt has a clean encode() returning (hidden_states, loc_scale, input_embeds, attention_mask)
@@ -83,7 +122,7 @@ class ChronosContextEncoder:
         ).unsqueeze(0)
 
         hidden_states = encoder.dropout(all_embeds)
-        for block in encoder.block:
+        for block in encoder.block[: self.num_encoder_layers]:
             block_output = block(
                 hidden_states,
                 position_ids=position_ids,
@@ -190,8 +229,12 @@ class ChronosContextEncoder:
         # --- Step 6: manual block loop, capture Z_l before each block ---
         hidden_states = encoder.dropout(all_embeds)
 
+        blocks = encoder.block
+        if self.num_encoder_layers is not None:
+            blocks = blocks[: self.num_encoder_layers]
+
         all_z: list[torch.Tensor] = []
-        for block in encoder.block:
+        for block in blocks:
             # Z_l = hidden state entering block l — context patches only.
             all_z.append(hidden_states[:, :num_context_patches, :].clone())
 

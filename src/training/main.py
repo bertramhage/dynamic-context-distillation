@@ -336,9 +336,32 @@ def main(cfg: DictConfig) -> None:
     context_pipeline = BaseChronosPipeline.from_pretrained(
         context_model_name, device_map=device,
     )
-    context_encoder = ChronosContextEncoder(context_pipeline)
+    num_encoder_layers = cfg.get("context_encoder_num_layers", None)
+    if num_encoder_layers is not None:
+        num_encoder_layers = int(num_encoder_layers)
+    context_encoder = ChronosContextEncoder(
+        context_pipeline, num_encoder_layers=num_encoder_layers,
+    )
     context_d_model = context_pipeline.model.config.d_model
-    print(f"Context encoder loaded: {context_model_name} (d_model={context_d_model})")
+    max_ctx = context_encoder.max_context_length
+    print(
+        f"Context encoder loaded: {context_model_name} "
+        f"(d_model={context_d_model}, max_context_length={max_ctx}"
+        f", num_encoder_layers={context_encoder.num_encoder_layers})"
+    )
+
+    # Validate that no context length can exceed the encoder's capacity.
+    max_long = int(t.long_context_steps)
+    if jitter_enabled and length_jitter_cfg.get("long_max_steps") is not None:
+        max_long = max(max_long, int(length_jitter_cfg.long_max_steps))
+    if max_long > max_ctx:
+        raise ValueError(
+            f"long_context_steps (or jitter long_max_steps) = {max_long} exceeds "
+            f"context encoder capacity ({max_ctx}) of {context_model_name}. "
+            f"Either reduce long_context_steps / long_max_steps or choose a "
+            f"model with a larger context window (e.g. amazon/chronos-2 "
+            f"supports 8192)."
+        )
 
     # --- Hypernetwork ---
     h = cfg.hypernet

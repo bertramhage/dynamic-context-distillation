@@ -46,7 +46,16 @@ training:
   num_workers: 4
 
 # --- Context encoder model ---
+# Choices (context_length / d_model):
+#   amazon/chronos-bolt-mini   — 2048 / 384
+#   amazon/chronos-bolt-small  — 2048 / 512
+#   amazon/chronos-bolt-base   — 2048 / 768
+#   amazon/chronos-2           — 8192 / 768
+# long_context_steps (and jitter long_max_steps) must not exceed context_length.
 context_encoder_model: "amazon/chronos-bolt-mini"
+# Early exit for Chronos-2: stop after N encoder layers (null = all 12).
+# Ignored for Chronos-Bolt models. Must be in [1, total_layers].
+context_encoder_num_layers: null
 
 # --- Hypernetwork architecture ---
 hypernet:
