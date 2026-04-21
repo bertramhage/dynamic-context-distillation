@@ -47,7 +47,7 @@ if [ "${RUN_UV_SYNC:-1}" = "1" ]; then
 fi
 
 # Checkpoint path
-CHECKPOINT_PATH="checkpoints/final_14d_g/best_hypernet.pt"
+CHECKPOINT_PATH="checkpoints/final_14d_g_v2/best_hypernet.pt"
 
 if [ ! -f "$CHECKPOINT_PATH" ]; then
   echo "Checkpoint not found at ${CHECKPOINT_PATH}"
