@@ -8,11 +8,14 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import math
+from pathlib import Path
 
 import hydra
 import pandas as pd
 import torch
+import wandb
 from chronos import BaseChronosPipeline, Chronos2Pipeline
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
@@ -39,6 +42,7 @@ def _build_dataset(
     cfg: DictConfig,
     start_date: str,
     end_date: str,
+    sensor_ids: list[str] | None = None,
     long_context_min_steps: int | None = None,
     long_context_max_steps: int | None = None,
     short_context_min_steps: int | None = None,
@@ -64,6 +68,7 @@ def _build_dataset(
         id_col=cfg.id_column,
         ts_col=cfg.timestamp_column,
         target_col=cfg.target,
+        sensor_ids=sensor_ids,
     )
 
 
@@ -119,6 +124,35 @@ def _build_length_jitter_config(
     }
 
 
+def _save_station_split(
+    checkpoint_dir: str | Path,
+    train_station_ids: list[str],
+    holdout_station_ids: list[str],
+    train_fraction: float,
+    station_split_seed: int,
+    stratify_by_mean: bool,
+) -> Path:
+    """Persist train/holdout station IDs and split metadata to JSON.
+
+    Returns the path to the written ``station_split.json`` file.
+    """
+    out_dir = Path(checkpoint_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    split_path = out_dir / "station_split.json"
+
+    payload = {
+        "train_station_ids": list(train_station_ids),
+        "holdout_station_ids": list(holdout_station_ids),
+        "n_train_stations": int(len(train_station_ids)),
+        "n_holdout_stations": int(len(holdout_station_ids)),
+        "train_fraction": float(train_fraction),
+        "station_split_seed": int(station_split_seed),
+        "stratify_by_mean": bool(stratify_by_mean),
+    }
+    split_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return split_path
+
+
 @hydra.main(
     config_path="../../conf",
     config_name="experiment_training",
@@ -156,6 +190,55 @@ def main(cfg: DictConfig) -> None:
 
     # --- Build train/val datasets ---
     t = cfg.training
+    station_holdout_cfg = t.get("station_holdout", None)
+    station_holdout_enabled = bool(
+        station_holdout_cfg and station_holdout_cfg.get("enabled", False)
+    )
+
+    train_station_ids: list[str] | None = None
+    holdout_station_ids: list[str] = []
+    if station_holdout_enabled:
+        all_station_ids = sorted(df_long[cfg.id_column].dropna().astype(str).unique().tolist())
+        train_fraction = float(station_holdout_cfg.get("train_fraction", 0.2))
+        split_seed_cfg = station_holdout_cfg.get("station_split_seed")
+        split_seed = int(cfg.seed if split_seed_cfg is None else split_seed_cfg)
+        stratify_by_mean = bool(station_holdout_cfg.get("stratify_by_mean", True))
+
+        train_station_ids, holdout_station_ids = shared_utils.split_stations(
+            sensor_ids=all_station_ids,
+            df_long=df_long,
+            train_fraction=train_fraction,
+            seed=split_seed,
+            stratify_by_mean=stratify_by_mean,
+            id_col=cfg.id_column,
+            target_col=cfg.target,
+        )
+
+        split_path = _save_station_split(
+            checkpoint_dir=cfg.training_loop.checkpoint_dir,
+            train_station_ids=train_station_ids,
+            holdout_station_ids=holdout_station_ids,
+            train_fraction=train_fraction,
+            station_split_seed=split_seed,
+            stratify_by_mean=stratify_by_mean,
+        )
+
+        print(
+            "Station holdout enabled: "
+            f"train={len(train_station_ids)}, holdout={len(holdout_station_ids)}"
+        )
+        print(f"Saved station split to: {split_path}")
+
+        if wandb.run is not None:
+            wandb.config.update(
+                {
+                    "n_train_stations": int(len(train_station_ids)),
+                    "n_holdout_stations": int(len(holdout_station_ids)),
+                    "station_split_path": str(split_path),
+                },
+                allow_val_change=True,
+            )
+
     length_jitter_cfg = t.get("length_jitter", None)
     jitter_enabled = bool(length_jitter_cfg and length_jitter_cfg.get("enabled", False))
     jitter_apply_in_val = bool(
@@ -195,6 +278,7 @@ def main(cfg: DictConfig) -> None:
         cfg,
         t.train_start_date,
         t.train_end_date,
+        sensor_ids=train_station_ids,
         **(train_bounds or {}),
     )
 
@@ -204,6 +288,7 @@ def main(cfg: DictConfig) -> None:
         cfg,
         t.val_start_date,
         t.val_end_date,
+        sensor_ids=train_station_ids,
         **(val_bounds or {}),
     )
 

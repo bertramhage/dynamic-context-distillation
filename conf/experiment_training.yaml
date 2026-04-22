@@ -41,6 +41,12 @@ training:
   # Rolling window stride for long context placement
   long_context_stride_steps: 288  # 1 day
 
+  station_holdout:
+    enabled: false
+    train_fraction: 0.2
+    station_split_seed: 42
+    stratify_by_mean: true
+
   # Dataloader
   train_batch_size: 64
   num_workers: 4

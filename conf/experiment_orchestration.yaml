@@ -57,6 +57,13 @@ orchestration:
   # Output directory for generated PEFT adapters.
   adapter_output_dir: outputs/adapters
 
+  # Optional station split JSON from training (station_holdout.enabled=true).
+  # When provided with station_eval_set=all, orchestration evaluates both
+  # train and holdout station subsets.
+  station_split_path: null
+  # all | train | holdout
+  station_eval_set: all
+
   # Identifier for this run's adapter set (auto-generated if null).
   run_id: null
 

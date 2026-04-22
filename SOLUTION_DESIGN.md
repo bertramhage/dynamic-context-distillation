@@ -70,6 +70,14 @@ The implementation is intentionally minimal and strict:
 
 When `training_loop.target_mode=ground_truth`, teacher cache loading/building is skipped entirely.
 
+### Key station-generalization config conventions
+- `training.station_holdout.enabled`: enables deterministic station split for train/holdout.
+- `training.station_holdout.train_fraction`: fraction of station IDs used for train+val dataset construction.
+- `training.station_holdout.station_split_seed`: split seed for reproducible station assignment.
+- `training.station_holdout.stratify_by_mean`: stratifies station sampling by quartiles of mean target value.
+- `orchestration.station_split_path`: optional path to `station_split.json` emitted by training.
+- `orchestration.station_eval_set`: `all | train | holdout` station subset selection during orchestration.
+
 ### Environment and run command
 This project uses **uv** for environment management.
 
@@ -137,15 +145,17 @@ The training layer supports two supervision objectives to train a hypernetwork t
 
 1. **Dataset** (`HypernetTrainingDataset`): constructs rolling-window samples from the long-format DataFrame. Each sample contains a long context window and multiple (short_context, forecast_target) query pairs. The long context is what the hypernetwork sees; the short contexts are what the LoRA-adapted student model sees during inference. The collate path supports optional hierarchical length jitter for both long and short contexts, and also supports fixed per-sample lengths from teacher-cache metadata to keep teacher/student supervision aligned across shuffled batches.
 
-2. **Teacher cache** (`teacher_cache.py`): in `target_mode=teacher`, before epoch training begins, the pipeline resolves a deterministic per-sample context-length realization (seeded jitter), computes frozen Chronos-2 teacher quantile outputs once, and saves them to disk. Cache file names are keyed by a hash that includes dataset windowing, explicit split date window (train/val start-end), jitter config + seed, and teacher-model identity metadata (name + optional revision). Matching caches are loaded instead of rebuilt. In `target_mode=ground_truth`, this cache path is not used.
+2. **Station holdout split (optional)**: when `training.station_holdout.enabled=true`, training computes `(train_station_ids, holdout_station_ids)` via `split_stations(...)`, restricts both train and val datasets to `train_station_ids`, and saves `station_split.json` in `training_loop.checkpoint_dir`. The saved split is reused later by orchestration for station-scoped evaluation.
 
-3. **Context encoding**: a separate frozen context encoder model (configurable via `context_encoder_model`) encodes the long context and returns its last hidden state `[batch, num_patches, d_model]`. Supported models are Chronos-Bolt (Mini/Small/Base, context limit 2048, T5-based `encode()`) and Chronos-2 (context limit 8192, manual block loop). The pipeline validates at startup that `long_context_steps` (including jitter bounds) does not exceed the chosen encoder's context limit, raising an error if it does. For Chronos-2, `context_encoder_num_layers` allows early exit after N of the 12 encoder blocks to reduce compute cost (ignored for Bolt, which uses an opaque `encode()` method).
+3. **Teacher cache** (`teacher_cache.py`): in `target_mode=teacher`, before epoch training begins, the pipeline resolves a deterministic per-sample context-length realization (seeded jitter), computes frozen Chronos-2 teacher quantile outputs once, and saves them to disk. Cache file names are keyed by a hash that includes dataset windowing, explicit split date window (train/val start-end), jitter config + seed, and teacher-model identity metadata (name + optional revision). Matching caches are loaded instead of rebuilt. In `target_mode=ground_truth`, this cache path is not used.
 
-4. **Hypernetwork** (`HyperLoRA`): a Perceiver aggregator compresses the context encoder output into fixed-size latent queries, which are processed by ResMLPBlock layers and projected via EinMix heads to produce LoRA A/B matrices for each target module across all 12 encoder layers. The EinMix head is initialized with a custom small std (`0.5 / sqrt(d_latent + d_lora * rank)`) to prevent wild initial LoRA outputs.
+4. **Context encoding**: a separate frozen context encoder model (configurable via `context_encoder_model`) encodes the long context and returns its last hidden state `[batch, num_patches, d_model]`. Supported models are Chronos-Bolt (Mini/Small/Base, context limit 2048, T5-based `encode()`) and Chronos-2 (context limit 8192, manual block loop). The pipeline validates at startup that `long_context_steps` (including jitter bounds) does not exceed the chosen encoder's context limit, raising an error if it does. For Chronos-2, `context_encoder_num_layers` allows early exit after N of the 12 encoder blocks to reduce compute cost (ignored for Bolt, which uses an opaque `encode()` method).
 
-5. **LoRA injection** (`apply_lora_to_model`): monkey-patches `nn.Linear.forward` on Chronos-2's TimeSelfAttention modules (q, k, v, o) to add the LoRA delta. Gradients flow through the LoRA weights back to the hypernetwork. Patches are cleaned up after each forward pass.
+5. **Hypernetwork** (`HyperLoRA`): a Perceiver aggregator compresses the context encoder output into fixed-size latent queries, which are processed by ResMLPBlock layers and projected via EinMix heads to produce LoRA A/B matrices for each target module across all 12 encoder layers. The EinMix head is initialized with a custom small std (`0.5 / sqrt(d_latent + d_lora * rank)`) to prevent wild initial LoRA outputs.
 
-6. **Training loop** (`HypernetTrainer`):
+6. **LoRA injection** (`apply_lora_to_model`): monkey-patches `nn.Linear.forward` on Chronos-2's TimeSelfAttention modules (q, k, v, o) to add the LoRA delta. Gradients flow through the LoRA weights back to the hypernetwork. Patches are cleaned up after each forward pass.
+
+7. **Training loop** (`HypernetTrainer`):
   - Student: short-context Chronos-2 + LoRA from hypernetwork.
   - `target_mode=teacher`: teacher quantile predictions are read from cache (or computed on-the-fly when cache is disabled), and loss is smooth L1 on teacher vs student quantiles.
   - `target_mode=ground_truth`: teacher forward is skipped, teacher contexts are not constructed in collation, and loss is CRPS approximated from quantile pinball loss against `batch.targets`.
@@ -223,7 +233,8 @@ The orchestration layer is a middleman between a trained hypernetwork (Layer 1 o
   - **PEFT mode** (`evaluation.use_dynamic_lora=false`): generate and save one adapter directory per assignment target, then evaluate via PEFT adapter switching.
   - **Dynamic mode** (`evaluation.use_dynamic_lora=true`): keep hypernetwork outputs in memory and expose a step-wise provider that builds batched per-sample LoRA tensors for evaluation.
 3. **Build assignment_df**: a DataFrame mapping `(item_id, prediction_time) → adapter_id` for every evaluation step.
-4. **Call `run_evaluation`** with short-context config, assignment_df, and optional dynamic LoRA provider.
+4. **Apply optional station split filtering**: when `orchestration.station_split_path` is provided, orchestration loads `train_station_ids` and `holdout_station_ids` and evaluates either one subset (`station_eval_set=train|holdout`) or both subsets (`station_eval_set=all`, default).
+5. **Call `run_evaluation`** with short-context config, assignment_df, and optional dynamic LoRA provider.
 
 At runtime, orchestration validates context-encoder compatibility by checking that `context_pipeline.model.config.d_model` matches the hypernetwork's expected input width (`hypernetwork.perceiver.d_input`).
 
@@ -261,7 +272,9 @@ Module short names: `"q"`, `"k"`, `"v"`, `"o"`.
 `save_adapter_to_disk` converts one sensor's slice of the hypernetwork output into a PEFT adapter directory containing `adapter_model.safetensors` and `adapter_config.json`. Modules not covered by the hypernetwork (GroupSelfAttention layer.1, output_patch_embedding) are filled with zero weights.
 
 ### Public orchestration API
-- `run_orchestration(cfg)` → `(horizon_metrics, runtime_stats)`
+- `run_orchestration(cfg)`:
+  - default (no station split): returns `(horizon_metrics, runtime_stats)`
+  - with `station_split_path` and `station_eval_set=all`: returns `(horizon_metrics_by_set, runtime_stats_by_set)` keyed by `train` and `holdout`
 
 ### CLI entrypoint
 ```bash

@@ -383,6 +383,137 @@ def set_seed(seed):
     np.random.seed(seed)
 
 
+def split_stations(
+    sensor_ids,
+    df_long: pd.DataFrame,
+    train_fraction: float,
+    seed: int,
+    stratify_by_mean: bool = True,
+    id_col: str = "item_id",
+    target_col: str = "target",
+) -> tuple[list[str], list[str]]:
+    """Split station IDs into train and holdout groups.
+
+    Returns two sorted lists: ``(train_station_ids, holdout_station_ids)``.
+    """
+    if sensor_ids is None or len(sensor_ids) == 0:
+        raise ValueError("sensor_ids must contain at least one station id")
+
+    fraction = float(train_fraction)
+    if not (0.0 < fraction < 1.0):
+        raise ValueError("train_fraction must be in the open interval (0, 1)")
+
+    station_ids = sorted({str(sid) for sid in sensor_ids})
+    n_total = len(station_ids)
+    if n_total < 2:
+        raise ValueError("Need at least 2 stations to build train/holdout split")
+
+    desired_train = int(round(n_total * fraction))
+    desired_train = max(1, min(desired_train, n_total - 1))
+    rng = np.random.default_rng(int(seed))
+
+    if not stratify_by_mean:
+        train_ids = np.sort(
+            rng.choice(np.asarray(station_ids, dtype=object), size=desired_train, replace=False)
+        ).tolist()
+        holdout_ids = sorted(set(station_ids) - set(train_ids))
+        return train_ids, holdout_ids
+
+    station_df = df_long[df_long[id_col].astype(str).isin(station_ids)][[id_col, target_col]].copy()
+    if station_df.empty:
+        raise ValueError("No station rows available for split_stations")
+
+    station_df[id_col] = station_df[id_col].astype(str)
+    mean_by_station = station_df.groupby(id_col, as_index=False)[target_col].mean()
+    mean_by_station = mean_by_station.set_index(id_col).reindex(station_ids).reset_index()
+
+    if mean_by_station[target_col].isna().any():
+        missing_ids = mean_by_station.loc[
+            mean_by_station[target_col].isna(), id_col
+        ].tolist()
+        raise ValueError(
+            "Missing mean target values for station ids: "
+            f"{missing_ids[:5]}{'...' if len(missing_ids) > 5 else ''}"
+        )
+
+    try:
+        bins = pd.qcut(mean_by_station[target_col], q=4, labels=False, duplicates="drop")
+    except ValueError:
+        bins = pd.Series(np.zeros(len(mean_by_station), dtype=int), index=mean_by_station.index)
+
+    # If quantile binning collapses to a single bin, fall back to random split.
+    if int(pd.Series(bins).nunique()) <= 1:
+        train_ids = np.sort(
+            rng.choice(np.asarray(station_ids, dtype=object), size=desired_train, replace=False)
+        ).tolist()
+        holdout_ids = sorted(set(station_ids) - set(train_ids))
+        return train_ids, holdout_ids
+
+    mean_by_station["_bin"] = pd.Series(bins, index=mean_by_station.index).astype(int)
+
+    grouped_ids = {
+        int(bin_id): sorted(group[id_col].astype(str).tolist())
+        for bin_id, group in mean_by_station.groupby("_bin", sort=True)
+    }
+
+    raw_targets = {
+        bin_id: len(ids_in_bin) * fraction for bin_id, ids_in_bin in grouped_ids.items()
+    }
+    train_counts = {
+        bin_id: int(np.floor(raw_targets[bin_id])) for bin_id in grouped_ids.keys()
+    }
+
+    remaining = desired_train - int(sum(train_counts.values()))
+    fractional_order = sorted(
+        grouped_ids.keys(),
+        key=lambda b: (raw_targets[b] - train_counts[b], len(grouped_ids[b])),
+        reverse=True,
+    )
+    for bin_id in fractional_order:
+        if remaining <= 0:
+            break
+        if train_counts[bin_id] < len(grouped_ids[bin_id]):
+            train_counts[bin_id] += 1
+            remaining -= 1
+
+    if remaining > 0:
+        for bin_id in sorted(grouped_ids.keys(), key=lambda b: len(grouped_ids[b]), reverse=True):
+            if remaining <= 0:
+                break
+            capacity = len(grouped_ids[bin_id]) - train_counts[bin_id]
+            if capacity <= 0:
+                continue
+            add = min(capacity, remaining)
+            train_counts[bin_id] += add
+            remaining -= add
+
+    train_ids = []
+    for bin_id, ids_in_bin in grouped_ids.items():
+        n_pick = min(train_counts[bin_id], len(ids_in_bin))
+        if n_pick <= 0:
+            continue
+        picked = rng.choice(np.asarray(ids_in_bin, dtype=object), size=n_pick, replace=False)
+        train_ids.extend(picked.tolist())
+
+    train_ids = sorted(set(train_ids))
+
+    if len(train_ids) < desired_train:
+        remaining_ids = sorted(set(station_ids) - set(train_ids))
+        n_extra = desired_train - len(train_ids)
+        extra = rng.choice(np.asarray(remaining_ids, dtype=object), size=n_extra, replace=False)
+        train_ids = sorted(train_ids + extra.tolist())
+    elif len(train_ids) > desired_train:
+        train_ids = np.sort(
+            rng.choice(np.asarray(train_ids, dtype=object), size=desired_train, replace=False)
+        ).tolist()
+
+    holdout_ids = sorted(set(station_ids) - set(train_ids))
+    if len(holdout_ids) == 0:
+        raise ValueError("Station split produced an empty holdout set")
+
+    return train_ids, holdout_ids
+
+
 # Visualization helper function from https://github.com/amazon-science/chronos-forecasting/blob/main/notebooks/chronos-2-quickstart.ipynb
 def plot_forecast(
     context_df: pd.DataFrame,
