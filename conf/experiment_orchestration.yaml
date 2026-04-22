@@ -57,6 +57,11 @@ orchestration:
   # Output directory for generated PEFT adapters.
   adapter_output_dir: outputs/adapters
 
+  # Optional dataset config override for cross-dataset evaluation.
+  # Example: dataset/METR-LA
+  # null -> use top-level dataset_cfg/default dataset settings.
+  eval_dataset_cfg: null
+
   # Optional station split JSON from training (station_holdout.enabled=true).
   # When provided with station_eval_set=all, orchestration evaluates both
   # train and holdout station subsets.

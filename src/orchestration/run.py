@@ -157,6 +157,39 @@ def _infer_output_layer_lora_dims(pipeline: Chronos2Pipeline) -> tuple[int, int]
     return int(layer.in_features), int(layer.out_features)
 
 
+def _resolve_orchestration_dataset_cfg(cfg):
+    """Return runtime cfg with optional dataset override for cross-dataset eval.
+
+    If ``orchestration.eval_dataset_cfg`` is set (for example
+    ``dataset/METR-LA``), the referenced dataset config is merged on top of the
+    current config so dataset/time-range fields come from the evaluation dataset
+    while orchestration/hypernetwork settings remain unchanged.
+    """
+    eval_dataset_cfg = getattr(cfg.orchestration, "eval_dataset_cfg", None)
+    if eval_dataset_cfg is None:
+        return cfg
+
+    eval_dataset_cfg = str(eval_dataset_cfg).strip()
+    if eval_dataset_cfg == "" or eval_dataset_cfg.lower() == "null":
+        return cfg
+
+    dataset_cfg_path = Path("conf") / f"{eval_dataset_cfg}.yaml"
+    if not dataset_cfg_path.exists():
+        raise FileNotFoundError(
+            "orchestration.eval_dataset_cfg not found: "
+            f"{dataset_cfg_path}"
+        )
+
+    eval_dataset_cfg_obj = OmegaConf.load(str(dataset_cfg_path))
+    runtime_cfg = OmegaConf.merge(cfg, eval_dataset_cfg_obj)
+    print(
+        "Cross-dataset evaluation enabled: "
+        f"using {eval_dataset_cfg} "
+        f"(dataset={runtime_cfg.dataset})"
+    )
+    return runtime_cfg
+
+
 class _DynamicLoraProvider:
     """On-demand batched LoRA provider for dynamic evaluation runtime."""
 
@@ -598,6 +631,7 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
     With ``orchestration.station_split_path`` and ``station_eval_set=all``, this
     returns two dictionaries keyed by ``train`` and ``holdout``.
     """
+    cfg = _resolve_orchestration_dataset_cfg(cfg)
     orch = cfg.orchestration
     shared_utils.set_seed(cfg.seed)
 

@@ -78,6 +78,9 @@ When `training_loop.target_mode=ground_truth`, teacher cache loading/building is
 - `orchestration.station_split_path`: optional path to `station_split.json` emitted by training.
 - `orchestration.station_eval_set`: `all | train | holdout` station subset selection during orchestration.
 
+### Key cross-dataset config conventions
+- `orchestration.eval_dataset_cfg`: optional dataset config override (e.g., `dataset/METR-LA`) used only for orchestration/evaluation dataset loading and slicing. When null, orchestration uses the top-level merged dataset config (`dataset_cfg`).
+
 ### Environment and run command
 This project uses **uv** for environment management.
 
@@ -229,6 +232,7 @@ uv run python -m src.training.main training.train_batch_size=8 training_loop.max
 The orchestration layer is a middleman between a trained hypernetwork (Layer 1 output) and the evaluation layer (Layer 3). Its job:
 
 1. **Load** dataset (`shared_utils.load_dataset`), Chronos-2 pipeline, hypernetwork checkpoint, and a configurable context-encoder model (`context_encoder_model`, default `amazon/chronos-bolt-mini`).
+  - Optional cross-dataset mode: when `orchestration.eval_dataset_cfg` is set, orchestration loads that dataset config for data/evaluation fields while keeping the same checkpoint/hypernetwork runtime config.
 2. **Prepare adapter runtime inputs**:
   - **PEFT mode** (`evaluation.use_dynamic_lora=false`): generate and save one adapter directory per assignment target, then evaluate via PEFT adapter switching.
   - **Dynamic mode** (`evaluation.use_dynamic_lora=true`): keep hypernetwork outputs in memory and expose a step-wise provider that builds batched per-sample LoRA tensors for evaluation.
@@ -282,6 +286,11 @@ uv run python -m src.orchestration.main \
     orchestration.checkpoint_path=checkpoints/my_hypernet.pt \
     orchestration.rolling_long_history=false \
     orchestration.long_history_start_date="2017-04-01"
+
+uv run python -m src.orchestration.main \
+  dataset_cfg=dataset/PEMS-BAY \
+  orchestration.eval_dataset_cfg=dataset/METR-LA \
+  orchestration.checkpoint_path=checkpoints/my_hypernet.pt
 ```
 
 ---
