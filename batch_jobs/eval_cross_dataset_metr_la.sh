@@ -77,8 +77,7 @@ ADAPTED_RUN_NAME="${RUN_STAMP}_adapted_pems_bay_hypernet"
 
 echo "Running METR-LA adapted evaluation with PEMS-BAY trained hypernetwork"
 uv run python -m src.orchestration.main \
-  dataset_cfg=dataset/PEMS-BAY \
-  orchestration.eval_dataset_cfg=dataset/METR-LA \
+  dataset_cfg=dataset/METR-LA \
   "orchestration.checkpoint_path=${CHECKPOINT_PATH}" \
   "orchestration.run_id=${ADAPTED_RUN_ID}" \
   orchestration.long_history_length_steps=2016 \

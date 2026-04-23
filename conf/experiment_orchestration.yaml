@@ -44,7 +44,7 @@ orchestration:
   rolling_long_history: false
 
   # Only used when rolling_long_history: false
-  long_history_start_date: "2017-04-01"
+  long_history_start_date: ${start_date}
 
   # Only used when rolling_long_history: true
   # Offset of long-history end relative to short-context start:
