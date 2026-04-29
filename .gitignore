@@ -24,3 +24,4 @@ env/
 outputs/
 wandb/
 batch_jobs/logs/*
+checkpoints/*
