@@ -6,6 +6,8 @@ Time-series foundation models like Chronos-2 deliver strong zero-shot forecasts 
 
 We adapt the [Doc-to-LoRA](https://arxiv.org/abs/2602.15902) framework — originally designed for LLMs — to work with the [Chronos-2](https://github.com/amazon-science/chronos-forecasting) time-series model. A hypernetwork reads a long traffic history and produces a lightweight LoRA adapter in a single forward pass. At inference time, Chronos-2 can then forecast accurately using only a short context window plus the generated adapter.
 
+See [summary_report.pdf](summary_report.pdf) for summary of main results and [technical_report.pdf](technical_report.pdf) for the technical report.
+
 ## The idea
 
 Chronos-2 normally needs a large chunk of recent history (the "context window") to make good predictions. Our approach splits the work into two stages:
