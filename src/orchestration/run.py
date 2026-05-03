@@ -16,9 +16,7 @@ from src.orchestration.lora_saver import save_adapter_to_disk
 from src.utils import utils as shared_utils
 
 
-# ---------------------------------------------------------------------------
 # Data helpers
-# ---------------------------------------------------------------------------
 
 def _extract_sensor_tensor(
     df_long: pd.DataFrame,
@@ -50,15 +48,12 @@ def _extract_sensor_tensor(
     return tensor, ordered_ids
 
 
-# ---------------------------------------------------------------------------
 # Prediction-time schedule (mirrors evaluation layer logic)
-# ---------------------------------------------------------------------------
 
 def _compute_prediction_times(
     cfg,
     df_long: pd.DataFrame,
 ) -> list[pd.Timestamp]:
-    """Compute the list of prediction times that the evaluation layer will use."""
     freq = cfg.freq
     id_column = cfg.id_column
     number_of_sensors = df_long[id_column].nunique()
@@ -98,9 +93,7 @@ def _compute_prediction_times(
     return times
 
 
-# ---------------------------------------------------------------------------
 # Long-history window helpers
-# ---------------------------------------------------------------------------
 
 def _long_history_window_fixed(
     cfg,
@@ -118,17 +111,6 @@ def _long_history_window_rolling(
     prediction_time: pd.Timestamp,
 ) -> tuple[pd.Timestamp, pd.Timestamp]:
     """Return (start, end) of the rolling long-history window for a given prediction time.
-
-    Layout:
-        |--- long history ---|--- short context ---|--- forecast ---|
-                             ^                     ^
-                             short_start           prediction_time
-
-    ``long_history_end_offset_steps`` shifts the end of the long history
-    relative to the short-context start:
-        0  -> no overlap / no gap (default)
-        >0 -> overlap into the short context
-        <0 -> gap between long history and short context
     """
     orch = cfg.orchestration
     freq_delta = pd.Timedelta(minutes=cfg.freq)
@@ -660,7 +642,7 @@ def run_orchestration(cfg) -> tuple[dict, dict]:
     if hasattr(hypernetwork, "perceiver") and hasattr(hypernetwork.perceiver, "d_input"):
         expected_context_d = int(hypernetwork.perceiver.d_input)
 
-    context_model_name = str(cfg.get("context_encoder_model", "amazon/chronos-bolt-mini"))
+    context_model_name = str(cfg.get("context_encoder_model", "amazon/chronos-2"))
     context_pipeline = BaseChronosPipeline.from_pretrained(
         context_model_name, device_map=device,
     )

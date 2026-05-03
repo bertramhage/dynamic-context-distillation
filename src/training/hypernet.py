@@ -1,12 +1,3 @@
-"""HyperLoRA generator for Chronos-2.
-
-Takes Perceiver output and produces LoRA A/B weight matrices for each
-target module across all encoder layers.
-
-Adapted from D2L's HyperLoRA: keeps ResMLPBlock pre-head processing and
-EinMix projection heads, but simplified for Chronos-2's architecture.
-"""
-
 import math
 
 import torch

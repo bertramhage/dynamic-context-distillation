@@ -1,9 +1,3 @@
-"""Teacher input-output cache for distillation training.
-
-Builds a deterministic, jitter-aware cache of teacher predictions so the
-frozen Chronos teacher does not run inside every training epoch.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -31,12 +25,10 @@ class TeacherCacheData:
 
 
 def _compute_num_output_patches(prediction_length: int, output_patch_size: int) -> int:
-    """Compute number of output patches needed for a prediction length."""
     return math.ceil(prediction_length / output_patch_size)
 
 
 def _normalize_for_hash(value: Any) -> Any:
-    """Convert objects to JSON-hashable primitives."""
     if isinstance(value, dict):
         return {str(k): _normalize_for_hash(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
@@ -47,7 +39,6 @@ def _normalize_for_hash(value: Any) -> Any:
 
 
 def _hash_dataset_samples(dataset) -> str:
-    """Hash sample identity tuples to detect dataset-window changes."""
     samples = getattr(dataset, "_samples", None)
     if samples is None:
         return "no-sample-index"
@@ -59,7 +50,6 @@ def _hash_dataset_samples(dataset) -> str:
 
 
 def _resolve_cache_dtype(dtype_name: str) -> torch.dtype:
-    """Map config dtype name to torch dtype used for persisted outputs."""
     name = str(dtype_name).lower()
     if name in {"float16", "fp16", "half"}:
         return torch.float16
@@ -129,7 +119,6 @@ def _resolve_sampled_lengths(
     jitter_seed: int,
     group_size: int,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Resolve deterministic per-sample long/short lengths for cache builds."""
     n_samples = len(dataset)
     if not jitter_enabled:
         return (
@@ -184,7 +173,6 @@ def _build_cache_key(
     teacher_model_name: str,
     cache_dtype: str,
 ) -> tuple[str, dict[str, Any]]:
-    """Build stable cache key from all parameters affecting teacher I/O."""
     t = cfg.training
 
     if split_name == "train":
@@ -250,7 +238,6 @@ def _run_teacher_forward(
     output_patch_size: int,
     device: str,
 ) -> torch.Tensor:
-    """Run frozen teacher over batched contexts and return quantile predictions."""
     batch_size, n_queries, context_len = teacher_contexts.shape
     flat_ctx = teacher_contexts.reshape(batch_size * n_queries, context_len).to(device)
 
@@ -353,7 +340,6 @@ def _build_teacher_preds(
 
 
 def _load_cache(path: Path) -> TeacherCacheData:
-    """Load persisted teacher cache tensors from disk."""
     payload = torch.load(path, map_location="cpu")
     return TeacherCacheData(
         split_name=str(payload["split_name"]),
@@ -375,7 +361,6 @@ def _save_cache(
     sampled_short_steps: torch.Tensor,
     teacher_preds: torch.Tensor,
 ) -> None:
-    """Persist teacher cache tensors and metadata."""
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
         {

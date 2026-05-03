@@ -1,45 +1,29 @@
 import torch
-from chronos import BaseChronosPipeline, Chronos2Pipeline
-
-from chronos.chronos_bolt import ChronosBoltModelForForecasting
+from chronos import Chronos2Pipeline
 
 
 class ChronosContextEncoder:
-    """Runs a frozen Chronos encoder and captures hidden states.
-
-    Supports both Chronos-2 (custom encoder blocks) and Chronos-Bolt
-    (T5-based encoder with a clean encode() method).
-    """
+    """Runs a frozen Chronos-2 encoder and captures hidden states."""
 
     def __init__(
         self,
-        pipeline: BaseChronosPipeline,
+        pipeline: Chronos2Pipeline,
         num_encoder_layers: int | None = None,
     ):
         self.model = pipeline.model
         self.model.eval()
         self.device = next(self.model.parameters()).device
-        self._is_bolt = isinstance(self.model, ChronosBoltModelForForecasting)
 
-        # Resolve and validate num_encoder_layers (Chronos-2 only).
-        if self._is_bolt:
-            self.num_encoder_layers: int | None = None
-            if num_encoder_layers is not None:
-                print(
-                    f"Warning: num_encoder_layers={num_encoder_layers} ignored "
-                    f"for Chronos-Bolt (uses opaque encode() method)."
-                )
+        total_layers = len(self.model.encoder.block)
+        if num_encoder_layers is None:
+            self.num_encoder_layers = total_layers
         else:
-            total_layers = len(self.model.encoder.block)
-            if num_encoder_layers is None:
-                self.num_encoder_layers = total_layers
-            else:
-                if not 1 <= num_encoder_layers <= total_layers:
-                    raise ValueError(
-                        f"num_encoder_layers={num_encoder_layers} out of range "
-                        f"[1, {total_layers}] for this Chronos-2 model."
-                    )
-                self.num_encoder_layers = num_encoder_layers
+            if not 1 <= num_encoder_layers <= total_layers:
+                raise ValueError(
+                    f"num_encoder_layers={num_encoder_layers} out of range "
+                    f"[1, {total_layers}] for this Chronos-2 model."
+                )
+            self.num_encoder_layers = num_encoder_layers
 
     @property
     def max_context_length(self) -> int:
@@ -50,8 +34,7 @@ class ChronosContextEncoder:
     def encode_last_hidden(self, context_tensor: torch.Tensor) -> torch.Tensor:
         """Get last-layer hidden states. Returns [B, num_patches, d_model].
 
-        For Chronos-Bolt models, uses the built-in encode() method.
-        For Chronos-2 models, runs the full encoder and returns the final output.
+        Runs the full Chronos-2 encoder and returns the final output.
 
         Raises:
             ValueError: If context length exceeds the encoder's maximum.
@@ -64,18 +47,6 @@ class ChronosContextEncoder:
                 f"{self.max_context_length}. Use a model with a larger "
                 f"context window or reduce long_context_steps."
             )
-
-        if self._is_bolt:
-            # ChronosBolt has a clean encode() returning (hidden_states, loc_scale, input_embeds, attention_mask)
-            hidden_states, _loc_scale, _input_embeds, _attention_mask = self.model.encode(
-                context=context_tensor
-            )
-            # hidden_states shape: [B, num_context_patches + (1 if REG), d_model]
-            # Exclude the REG token (appended at the end) if present
-            num_context_patches = hidden_states.shape[1]
-            if self.model.chronos_config.use_reg_token:
-                num_context_patches -= 1
-            return hidden_states[:, :num_context_patches, :]
 
         # Chronos-2: run full encoder, return final hidden states (context patches only)
         model = self.model

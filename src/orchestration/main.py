@@ -10,7 +10,6 @@ from src.utils.wandb_utils import init_wandb, finish_wandb
 
 
 def _update_wandb_summary(horizon_metrics: dict, runtime_stats: dict, prefix: str = "") -> None:
-    """Write evaluation and runtime aggregates to wandb.summary."""
     all_horizons = list(horizon_metrics.keys())
     if all_horizons:
         sample_metrics = next(iter(horizon_metrics.values()))

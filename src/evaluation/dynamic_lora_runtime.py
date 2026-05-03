@@ -1,11 +1,3 @@
-"""Dynamic batched LoRA runtime for Chronos-2 evaluation.
-
-This module applies per-sample LoRA weights directly in a single batched
-forward pass by monkey-patching Chronos-2 TimeSelfAttention projection layers.
-The implementation uses plain PyTorch batched matmul primitives and does not
-rely on PEFT adapter switching.
-"""
-
 from __future__ import annotations
 
 from functools import partial

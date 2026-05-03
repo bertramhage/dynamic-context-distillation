@@ -64,12 +64,12 @@ def save_adapter_to_disk(
         B = lora_dict[short_name]["B"]  # [batch, n_layers, d_out, r]
 
         for layer_idx in range(NUM_ENCODER_LAYERS):
-            # TimeSelfAttention (layer.0) — use hypernetwork weights.
+            # TimeSelfAttention (layer.0)
             prefix = f"base_model.model.encoder.block.{layer_idx}.layer.0.{full_name}"
             state_dict[f"{prefix}.lora_A.weight"] = A[sensor_idx, layer_idx].cpu().contiguous()
             state_dict[f"{prefix}.lora_B.weight"] = B[sensor_idx, layer_idx].cpu().contiguous()
 
-            # GroupSelfAttention (layer.1) — zero weights (no effect on inference).
+            # GroupSelfAttention (layer.1): zero weights (no effect on inference).
             prefix_group = f"base_model.model.encoder.block.{layer_idx}.layer.1.{full_name}"
             state_dict[f"{prefix_group}.lora_A.weight"] = torch.zeros(rank, d_model)
             state_dict[f"{prefix_group}.lora_B.weight"] = torch.zeros(d_model, rank)

@@ -81,10 +81,34 @@ uv sync
 - Unzip
 - Place `pems-bay.h5` in root folder `data`
 
-**3. Run baseline evaluation**:
+**3. Train the hypernetwork**:
 ```bash
-uv run python -m src.evaluation.main --config-name experiment_baseline dataset_cfg=dataset/PEMS-BAY
+uv run python -m src.training.main \
+    training.target_mode=teacher \
+    training.long_context_steps=2016 \
+    training.short_context_steps=288 \
+    wandb.enabled=true
 ```
 
-## AI Agents
-Note for AI Agents: Please read AGENTS.md before suggesting any code changes to understand the architectural patterns and state management used in this project.
+**4. Evaluate**:
+
+Using the HyperLoRA setup:
+```bash
+uv run python -m src.orchestration.main \
+    orchestration.checkpoint_path=checkpoints/best_hypernet.pt \
+    orchestration.long_history_start_date="2017-04-01" 
+```
+
+Baseline evaluation: vanilla Chronos-2, 288-step context
+```bash
+uv run python -m src.evaluation.main --config-name experiment_baseline \
+    dataset_cfg=dataset/PEMS-BAY
+```
+
+Cross-dataset transfer (trained on PEMS-BAY, evaluated on METR-LA, requires the METR-LA dataset downloaded):
+```bash
+uv run python -m src.orchestration.main \
+    dataset_cfg=dataset/PEMS-BAY \
+    orchestration.eval_dataset_cfg=dataset/METR-LA \
+    orchestration.checkpoint_path=checkpoints/best_hypernet.pt
+```

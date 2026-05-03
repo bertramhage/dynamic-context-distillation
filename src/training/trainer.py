@@ -1,17 +1,3 @@
-"""Hypernetwork training loop with teacher or ground-truth supervision.
-
-Teacher mode:
-    Teacher = Chronos-2 with full long+short context (frozen).
-    Student = Chronos-2 with short context + LoRA from hypernetwork.
-    Loss = smooth-L1 proxy over teacher/student quantile outputs.
-
-Ground-truth mode:
-    Student = Chronos-2 with short context + LoRA from hypernetwork.
-    Loss = CRPS approximation from quantile pinball losses vs. targets.
-
-Only hypernetwork parameters are trained.
-"""
-
 from __future__ import annotations
 
 import math
@@ -102,7 +88,6 @@ def quantile_crps_loss(
 
 
 def _compute_num_output_patches(prediction_length: int, output_patch_size: int) -> int:
-    """Compute number of output patches needed for a given prediction length."""
     return math.ceil(prediction_length / output_patch_size)
 
 
@@ -198,7 +183,6 @@ class HypernetTrainer:
             p.requires_grad = False
 
     def _resolve_quantile_levels(self, n_quantiles: int, device: str | torch.device) -> torch.Tensor:
-        """Return quantile levels aligned with the model output width."""
         if self.quantile_levels is not None and self.quantile_levels.numel() == n_quantiles:
             return self.quantile_levels.to(device=device, dtype=torch.float32)
 
@@ -285,7 +269,6 @@ class HypernetTrainer:
         return qp.reshape(B, Q, n_q, prediction_length)
 
     def _compute_l1_reg(self, lora_dict: dict) -> torch.Tensor:
-        """L1 regularization on generated LoRA weights."""
         l1 = torch.tensor(0.0, device=self.device)
         n = 0
         for module_weights in lora_dict.values():

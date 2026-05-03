@@ -1,9 +1,3 @@
-"""Perceiver aggregator adapted from D2L for Chronos-2 time-series context.
-
-Compresses variable-length context encoder output [batch, seq_len, d_model]
-into a fixed set of latent queries that the HyperLoRA heads consume.
-"""
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

@@ -1,17 +1,3 @@
-"""Training dataset for hypernetwork supervision loops.
-
-Constructs rolling-window samples from the PEMS-BAY (or similar) long-format
-DataFrame. Each sample consists of:
-    - A long context window (fed to context encoder -> hypernetwork)
-    - Multiple (short_context, forecast_target) pairs as "queries" for that context
-      (the time-series analogue of D2L's multi-query per context)
-
-Chronology is strictly causal:
-    |---- long context ----|---- short context ----|---- forecast horizon ----|
-                           ^                       ^
-                           short_start              forecast_origin
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -49,7 +35,6 @@ def _sample_hierarchical_lengths(
     max_steps: int,
     quantize_steps: int,
 ) -> torch.Tensor:
-    """Sample batch-correlated lengths via outer and inner Gaussians."""
     if quantize_steps <= 0:
         raise ValueError("quantize_steps must be >= 1")
 
@@ -361,7 +346,6 @@ def make_training_collate_fn(
     fixed_short_steps: torch.Tensor | None = None,
     build_teacher_contexts: bool = True,
 ) -> Callable[[list[dict[str, torch.Tensor]]], dict[str, torch.Tensor]]:
-    """Build a picklable collator for DataLoader workers."""
     return TrainingBatchCollator(
         long_context_steps=long_context_steps,
         short_context_steps=short_context_steps,

@@ -1,13 +1,3 @@
-"""Runtime LoRA injection for Chronos-2 during training.
-
-Monkey-patches nn.Linear.forward in Chronos-2's encoder blocks to add
-LoRA deltas produced by the hypernetwork. Unlike PEFT (used at evaluation),
-this keeps gradients flowing through the LoRA weights back to the hypernetwork.
-
-Adapted from D2L's lora_layer.py — simplified for Chronos-2 where each
-sample in the batch gets the same LoRA (no multi-query packing).
-"""
-
 from __future__ import annotations
 
 from functools import partial

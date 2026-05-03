@@ -1,11 +1,3 @@
-"""CLI entrypoint for hypernetwork training.
-
-Usage:
-    uv run python -m src.training.main
-    uv run python -m src.training.main wandb.enabled=true
-    uv run python -m src.training.main training.train_batch_size=8 optimizer.lr=5e-5
-"""
-
 from __future__ import annotations
 
 import json
@@ -48,7 +40,6 @@ def _build_dataset(
     short_context_min_steps: int | None = None,
     short_context_max_steps: int | None = None,
 ) -> HypernetTrainingDataset:
-    """Build a HypernetTrainingDataset from config."""
     t = cfg.training
     return HypernetTrainingDataset(
         df_long=df_long,
@@ -80,11 +71,6 @@ def _resolve_bounds(
     min_steps: int | None,
     max_steps: int | None,
 ) -> tuple[int, int]:
-    """Resolve min/max bounds for length sampling.
-
-    If explicit bounds are not provided, uses +/- 3 sigma_total where
-    sigma_total = sqrt(sigma_outer^2 + sigma_inner^2).
-    """
     sigma_total = math.sqrt(max(0.0, sigma_outer ** 2 + sigma_inner ** 2))
     spread = int(round(3.0 * sigma_total))
 
@@ -106,7 +92,6 @@ def _build_length_jitter_config(
     length_jitter_cfg,
     train_bounds: dict[str, int] | None,
 ) -> dict | None:
-    """Build collate jitter config with resolved bounds."""
     if length_jitter_cfg is None or train_bounds is None:
         return None
 
@@ -132,10 +117,6 @@ def _save_station_split(
     station_split_seed: int,
     stratify_by_mean: bool,
 ) -> Path:
-    """Persist train/holdout station IDs and split metadata to JSON.
-
-    Returns the path to the written ``station_split.json`` file.
-    """
     out_dir = Path(checkpoint_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     split_path = out_dir / "station_split.json"
@@ -159,36 +140,32 @@ def _save_station_split(
     version_base=None,
 )
 def main(cfg: DictConfig) -> None:
+
     # Merge dataset config
     dataset_cfg_path = cfg.dataset_cfg
     dataset_cfg = OmegaConf.load(f"conf/{dataset_cfg_path}.yaml")
     cfg = OmegaConf.merge(dataset_cfg, cfg)
 
-    print("=== Hypernetwork Training ===")
+    print("Hypernetwork training")
     print(OmegaConf.to_yaml(cfg, resolve=True))
 
     shared_utils.set_seed(cfg.seed)
 
     target_mode = str(cfg.training_loop.get("target_mode", "teacher")).lower()
-    if target_mode not in {"teacher", "ground_truth"}:
-        raise ValueError(
-            f"Unsupported training_loop.target_mode={target_mode!r}. "
-            "Expected 'teacher' or 'ground_truth'."
-        )
     print(f"Target supervision mode: {target_mode}")
 
-    # --- WandB ---
+    # WandB
     init_wandb(cfg, group="training")
 
-    # --- Device ---
+    # Device
     device = _resolve_device()
     print(f"Device: {device}")
 
-    # --- Load dataset ---
+    # Load dataset
     df_long = shared_utils.load_dataset(cfg)
     print(f"Dataset loaded: {len(df_long)} rows")
 
-    # --- Build train/val datasets ---
+    # Build train/val datasets
     t = cfg.training
     station_holdout_cfg = t.get("station_holdout", None)
     station_holdout_enabled = bool(
@@ -292,7 +269,7 @@ def main(cfg: DictConfig) -> None:
         **(val_bounds or {}),
     )
 
-    # --- Load Chronos-2 (teacher/student predictions) ---
+    # Load Chronos-2
     pipeline: Chronos2Pipeline = BaseChronosPipeline.from_pretrained(
         "amazon/chronos-2", device_map=device,
     )
@@ -330,7 +307,6 @@ def main(cfg: DictConfig) -> None:
     else:
         train_teacher_cache = None
         val_teacher_cache = None
-        print("Teacher cache skipped (ground_truth supervision mode)")
 
     train_build_teacher_contexts = (target_mode == "teacher") and (train_teacher_cache is None)
     val_build_teacher_contexts = (target_mode == "teacher") and (val_teacher_cache is None)
@@ -372,29 +348,6 @@ def main(cfg: DictConfig) -> None:
         build_teacher_contexts=val_build_teacher_contexts,
     )
 
-    if jitter_enabled:
-        print("Length jitter enabled (hierarchical batch sampling):")
-        print(
-            "  long steps bounds: "
-            f"[{train_bounds['long_context_min_steps']}, {train_bounds['long_context_max_steps']}]"
-        )
-        print(
-            "  short steps bounds: "
-            f"[{train_bounds['short_context_min_steps']}, {train_bounds['short_context_max_steps']}]"
-        )
-        print(f"  apply in validation: {jitter_apply_in_val}")
-
-    if train_teacher_cache is not None:
-        print(
-            "Teacher cache (train): "
-            f"{train_teacher_cache.cache_path} (key={train_teacher_cache.cache_key})"
-        )
-    if val_teacher_cache is not None:
-        print(
-            "Teacher cache (val): "
-            f"{val_teacher_cache.cache_path} (key={val_teacher_cache.cache_key})"
-        )
-
     print(f"Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}")
     pin_memory = device == "cuda"
 
@@ -416,7 +369,7 @@ def main(cfg: DictConfig) -> None:
         pin_memory=pin_memory,
     )
 
-    # --- Load context encoder model (embeddings for hypernetwork) ---
+    # Load context encoder model
     context_model_name = cfg.get("context_encoder_model", "amazon/chronos-2")
     context_pipeline = BaseChronosPipeline.from_pretrained(
         context_model_name, device_map=device,
@@ -435,7 +388,7 @@ def main(cfg: DictConfig) -> None:
         f", num_encoder_layers={context_encoder.num_encoder_layers})"
     )
 
-    # Validate that no context length can exceed the encoder's capacity.
+    # Validate that context length cannot exceed the encoders capacity
     max_long = int(t.long_context_steps)
     if jitter_enabled and length_jitter_cfg.get("long_max_steps") is not None:
         max_long = max(max_long, int(length_jitter_cfg.long_max_steps))
@@ -448,7 +401,7 @@ def main(cfg: DictConfig) -> None:
             f"supports 8192)."
         )
 
-    # --- Hypernetwork ---
+    # Hypernetwork
     h = cfg.hypernet
     hypernetwork = HyperLoRA(
         d_input=context_d_model,
@@ -464,7 +417,7 @@ def main(cfg: DictConfig) -> None:
     n_params = sum(p.numel() for p in hypernetwork.parameters())
     print(f"Hypernetwork params: {n_params:,}")
 
-    # --- Trainer ---
+    # Trainer
     loop_cfg = cfg.training_loop
     trainer = HypernetTrainer(
         hypernetwork=hypernetwork,
@@ -490,7 +443,7 @@ def main(cfg: DictConfig) -> None:
         quantile_levels=cfg.get("quantile_levels", None),
     )
 
-    # --- Train ---
+    # Train
     best_path = trainer.train()
     print(f"\nTraining complete. Best checkpoint: {best_path}")
 
