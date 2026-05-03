@@ -1,4 +1,4 @@
-# Distilling Context into Parameters for Chronos-2
+# Dynamic Context Distillation: Resilient Foundation Models for Decentralized Traffic Forecasting
 
 > DTU 42578 Advanced Business Analytics
 
